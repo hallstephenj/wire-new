@@ -15,7 +15,7 @@ clustering:
   lookback_hours: 48
 
 ai:
-  model: "claude-3-5-haiku-20241022"
+  model: "claude-haiku-4-5-20251001"
   batch_size: 20
   batch_wait_seconds: 60
   max_headline_chars: 100
