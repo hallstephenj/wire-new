@@ -152,6 +152,13 @@ header {
     margin-left: 6px;
 }
 
+.timestamp {
+    font-size: 10px;
+    color: #3a3a3a;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
 .ad-slot {
     padding: 8px 0;
     border-bottom: 1px solid #111;
@@ -237,6 +244,34 @@ document.querySelectorAll('#cat-tabs .tab').forEach(btn => {
     });
 });
 
+function formatTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const now = new Date();
+    const diffMs = now - d;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr = Math.floor(diffMs / 3600000);
+    const diffDay = Math.floor(diffMs / 86400000);
+
+    if (diffMin < 1) return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24) return `${diffHr}h ago`;
+    if (diffDay < 7) return `${diffDay}d ago`;
+
+    // Fallback: date
+    const mon = d.toLocaleString('en', { month: 'short' });
+    return `${mon} ${d.getDate()}`;
+}
+
+function formatFullDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    });
+}
+
 function renderStory(s) {
     const others = s.other_sources.slice(0, 4).map(o =>
         `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`
@@ -244,11 +279,13 @@ function renderStory(s) {
 
     const alsoLine = others ? `<div class="also">also: ${others}</div>` : '';
     const countDisplay = s.source_count > 1 ? `<span class="count">+${s.source_count}</span>` : '';
+    const timeAgo = formatTime(s.first_seen);
+    const fullDate = formatFullDate(s.first_seen);
 
     return `<div class="story" data-id="${s.id}">
         <div class="story-main">
             <span class="headline"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.headline)}</a></span>
-            <span class="meta"><span class="source">via ${esc(s.source)}</span>${countDisplay}</span>
+            <span class="meta"><span class="source">via ${esc(s.source)}</span>${countDisplay}<span class="timestamp" title="${esc(fullDate)}">${esc(timeAgo)}</span></span>
         </div>
         ${alsoLine}
     </div>`;
