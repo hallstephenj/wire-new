@@ -291,21 +291,30 @@ a:hover { text-decoration: underline; }
     .logo { font-size: 18px; }
 
     .grid {
-        display: flex;
+        display: flex !important;
         flex-direction: column;
-        min-height: auto;
+        min-height: auto !important;
+        height: auto !important;
     }
 
     .panel {
-        min-height: 0;
-        max-height: none;
+        min-height: 0 !important;
+        max-height: none !important;
+        height: auto !important;
+        flex: none !important;
+        overflow: visible;
         border-left: none;
         border-right: none;
     }
 
-    .panel-body { padding: 10px; }
+    .panel-body {
+        padding: 10px;
+        overflow: visible !important;
+        max-height: none !important;
+        height: auto !important;
+    }
 
-    /* Processes: single column on small screens */
+    /* Processes */
     .jobs-grid {
         grid-template-columns: 1fr 1fr;
         gap: 6px;
@@ -316,7 +325,12 @@ a:hover { text-decoration: underline; }
     .job-field { font-size: 10px; }
     .job-countdown { font-size: 14px; }
 
-    /* Event stream: stack filter controls */
+    /* Event stream: cap height so it doesn't go forever */
+    #event-stream-body {
+        max-height: 400px !important;
+        overflow-y: auto !important;
+    }
+
     .panel-header {
         flex-wrap: wrap;
         gap: 6px;
@@ -347,7 +361,7 @@ a:hover { text-decoration: underline; }
     /* Stats */
     .stat-row { font-size: 12px; padding: 4px 0; }
 
-    /* Tables: horizontal scroll */
+    /* Tables: horizontal scroll, capped height */
     .pipeline-table, .scores-table {
         font-size: 11px;
         display: block;
@@ -358,7 +372,6 @@ a:hover { text-decoration: underline; }
     .pipeline-table td, .scores-table td { white-space: nowrap; padding: 6px; }
     .pipeline-table th, .scores-table th { padding: 6px; font-size: 10px; }
 
-    /* Full-width panel */
     .panel-full { grid-column: auto; }
 }
 
