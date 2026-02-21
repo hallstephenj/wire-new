@@ -30,7 +30,8 @@ def init_db():
         source_count INTEGER DEFAULT 1,
         first_seen TEXT,
         last_updated TEXT,
-        expires_at TEXT
+        expires_at TEXT,
+        published_at TEXT
     );
     CREATE TABLE IF NOT EXISTS raw_items (
         id TEXT PRIMARY KEY,
@@ -56,5 +57,15 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_clusters_last_updated ON story_clusters(last_updated DESC);
     CREATE INDEX IF NOT EXISTS idx_raw_source_url ON raw_items(source_url);
     """)
+    # Migration: add published_at to story_clusters if missing
+    cols = [r[1] for r in conn.execute("PRAGMA table_info(story_clusters)").fetchall()]
+    if "published_at" not in cols:
+        conn.execute("ALTER TABLE story_clusters ADD COLUMN published_at TEXT")
+        # Backfill from raw_items
+        conn.execute("""
+            UPDATE story_clusters SET published_at = (
+                SELECT MIN(ri.published_at) FROM raw_items ri WHERE ri.cluster_id = story_clusters.id
+            ) WHERE published_at IS NULL
+        """)
     conn.commit()
     conn.close()

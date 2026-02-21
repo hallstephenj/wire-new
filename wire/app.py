@@ -64,12 +64,12 @@ async def get_stories(
         where.append("sc.last_updated > ?")
         params.append(since)
 
-    order = "sc.source_count DESC, sc.first_seen DESC" if sort == "hot" else "sc.first_seen DESC"
+    order = "sc.source_count DESC, sc.published_at DESC" if sort == "hot" else "sc.published_at DESC"
     where_clause = " AND ".join(where)
 
     rows = conn.execute(f"""
         SELECT sc.id, sc.rewritten_headline, sc.primary_url, sc.primary_source,
-               sc.category, sc.source_count, sc.first_seen, sc.last_updated
+               sc.category, sc.source_count, sc.first_seen, sc.last_updated, sc.published_at
         FROM story_clusters sc
         WHERE {where_clause}
         ORDER BY {order}
@@ -90,6 +90,7 @@ async def get_stories(
             "category": r["category"],
             "source_count": r["source_count"],
             "first_seen": r["first_seen"],
+            "published_at": r["published_at"],
             "last_updated": r["last_updated"],
             "other_sources": [{"name": s["source_name"], "url": s["source_url"]} for s in sources]
         })

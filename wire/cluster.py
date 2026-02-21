@@ -28,7 +28,7 @@ _fitted = False
 _corpus_ids = []
 _corpus_headlines = []
 
-def assign_cluster(conn, headline: str, url: str, source_name: str, category: str) -> str:
+def assign_cluster(conn, headline: str, url: str, source_name: str, category: str, published_at: str = None) -> str:
     """Find or create a cluster for this headline. Returns cluster_id."""
     cfg = load_config()
     threshold = cfg["clustering"]["similarity_threshold"]
@@ -54,7 +54,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
 
             if best_sim >= threshold:
                 cluster_id = rows[best_idx]["id"]
-                _add_to_cluster(conn, cluster_id, source_name, url, headline, category)
+                _add_to_cluster(conn, cluster_id, source_name, url, headline, category, published_at=published_at)
                 return cluster_id
         except Exception as e:
             log.warning(f"Clustering error: {e}")
@@ -62,9 +62,10 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
     # New cluster
     cluster_id = str(uuid.uuid4())
     expires = (now + timedelta(days=7)).isoformat()
+    pub_time = published_at or now.isoformat()
     conn.execute(
-        "INSERT INTO story_clusters (id, rewritten_headline, primary_url, primary_source, category, source_count, first_seen, last_updated, expires_at) VALUES (?,?,?,?,?,?,?,?,?)",
-        (cluster_id, headline, url, source_name, category, 1, now.isoformat(), now.isoformat(), expires)
+        "INSERT INTO story_clusters (id, rewritten_headline, primary_url, primary_source, category, source_count, first_seen, last_updated, expires_at, published_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+        (cluster_id, headline, url, source_name, category, 1, now.isoformat(), now.isoformat(), expires, pub_time)
     )
     conn.execute(
         "INSERT OR IGNORE INTO cluster_sources (cluster_id, source_name, source_url, added_at) VALUES (?,?,?,?)",
@@ -72,7 +73,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
     )
     return cluster_id
 
-def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline: str, category: str):
+def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline: str, category: str, published_at: str = None):
     now = datetime.now(timezone.utc).isoformat()
 
     # Add source
@@ -91,6 +92,12 @@ def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline:
     if get_source_priority(source_name) < get_source_priority(current["primary_source"]):
         updates["primary_url"] = url
         updates["primary_source"] = source_name
+
+    # Update published_at if this item is earlier
+    if published_at:
+        existing_pub = conn.execute("SELECT published_at FROM story_clusters WHERE id=?", (cluster_id,)).fetchone()["published_at"]
+        if existing_pub is None or published_at < existing_pub:
+            updates["published_at"] = published_at
 
     set_clause = ", ".join(f"{k}=?" for k in updates)
     conn.execute(f"UPDATE story_clusters SET {set_clause} WHERE id=?", (*updates.values(), cluster_id))

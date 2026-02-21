@@ -56,7 +56,7 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
         published = parse_published(entry)
         now = datetime.now(timezone.utc).isoformat()
 
-        cluster_id = assign_cluster(conn, title, link, name, category)
+        cluster_id = assign_cluster(conn, title, link, name, category, published_at=published)
 
         conn.execute(
             "INSERT INTO raw_items (id, source_url, source_name, original_headline, published_at, ingested_at, feed_url, category, cluster_id) VALUES (?,?,?,?,?,?,?,?,?)",
