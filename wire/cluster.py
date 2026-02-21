@@ -6,20 +6,8 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from wire.config import load_config
-
-SOURCE_PRIORITY = {
-    "Reuters": 1, "Reuters Business": 1, "Reuters Politics": 1, "Reuters World": 1,
-    "AP": 2, "AP Politics": 2, "AP Top News": 2,
-    "Bloomberg": 3,
-    "WSJ Markets": 4, "WSJ": 4,
-    "NYT": 5, "New York Times": 5,
-    "WaPo": 6, "Washington Post": 6,
-    "BBC World": 7, "BBC": 7,
-    "CNN": 8, "CNBC": 8,
-}
-
-def get_source_priority(name: str) -> int:
-    return SOURCE_PRIORITY.get(name, 50)
+from wire.events import push as ev
+from wire.scores import get_total_score
 
 log = logging.getLogger("wire.cluster")
 
@@ -54,12 +42,14 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
 
             if best_sim >= threshold:
                 cluster_id = rows[best_idx]["id"]
+                ev("cluster_hit", headline=headline, matched=rows[best_idx]["rewritten_headline"], similarity=round(float(best_sim), 3))
                 _add_to_cluster(conn, cluster_id, source_name, url, headline, category, published_at=published_at)
                 return cluster_id
         except Exception as e:
             log.warning(f"Clustering error: {e}")
 
     # New cluster
+    ev("cluster_new", headline=headline, source=source_name, category=category)
     cluster_id = str(uuid.uuid4())
     expires = (now + timedelta(days=7)).isoformat()
     pub_time = published_at or now.isoformat()
@@ -82,14 +72,14 @@ def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline:
         (cluster_id, source_name, url, now)
     )
 
-    # Update count
-    count = conn.execute("SELECT COUNT(*) as c FROM cluster_sources WHERE cluster_id=?", (cluster_id,)).fetchone()["c"]
+    # Update count (distinct sources, not URLs)
+    count = conn.execute("SELECT COUNT(DISTINCT source_name) as c FROM cluster_sources WHERE cluster_id=?", (cluster_id,)).fetchone()["c"]
 
     # Check if this source has higher priority
     current = conn.execute("SELECT primary_source FROM story_clusters WHERE id=?", (cluster_id,)).fetchone()
     updates = {"source_count": count, "last_updated": now}
 
-    if get_source_priority(source_name) < get_source_priority(current["primary_source"]):
+    if get_total_score(source_name) > get_total_score(current["primary_source"]):
         updates["primary_url"] = url
         updates["primary_source"] = source_name
 

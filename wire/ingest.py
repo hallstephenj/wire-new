@@ -9,8 +9,36 @@ import httpx
 from wire.db import get_conn
 from wire.config import load_feeds, load_config
 from wire.cluster import assign_cluster
+from wire.events import push as ev
 
 log = logging.getLogger("wire.ingest")
+
+# Normalize common source name variants to a canonical form
+SOURCE_ALIASES = {
+    "The Wall Street Journal": "Wall Street Journal",
+    "WSJ": "Wall Street Journal",
+    "WSJ Markets": "Wall Street Journal",
+    "The New York Times": "New York Times",
+    "NYT": "New York Times",
+    "The Washington Post": "Washington Post",
+    "WaPo": "Washington Post",
+    "The Verge": "The Verge",
+    "The Guardian": "The Guardian",
+    "The Atlantic": "The Atlantic",
+    "The Hill": "The Hill",
+    "The Block": "The Block",
+    "The Record": "The Record",
+    "The Information": "The Information",
+    "Reuters Business": "Reuters",
+    "Reuters Politics": "Reuters",
+    "Reuters World": "Reuters",
+    "AP Politics": "AP",
+    "AP Top News": "AP",
+    "SCMP": "South China Morning Post",
+}
+
+def _normalize_source(name: str) -> str:
+    return SOURCE_ALIASES.get(name, name)
 
 # ── Content-based category classification ─────────────────────────────────
 # When a general-purpose source (NYT, Reuters, etc.) is in the tech feed,
@@ -106,6 +134,7 @@ def parse_published(entry) -> str:
 async def poll_feeds():
     feeds_cfg = load_feeds()
     log.info("Polling RSS feeds...")
+    ev("ingest_start", job="rss")
     count = 0
     for category, feeds in feeds_cfg["feeds"].items():
         for feed in feeds:
@@ -114,6 +143,7 @@ async def poll_feeds():
                 count += n
             except Exception as e:
                 log.warning(f"Feed error {feed['name']}: {e}")
+    ev("ingest_done", job="rss", items=count)
     log.info(f"Ingested {count} new items")
 
 async def _poll_single_feed(url: str, name: str, category: str) -> int:
@@ -131,8 +161,28 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
         if not link or not title:
             continue
 
+        # Extract real source from Google News entries
+        item_name = name
+        if name == "Google News":
+            # feedparser exposes <source> element; title also ends with " - Source"
+            if hasattr(entry, "source") and hasattr(entry.source, "title"):
+                item_name = entry.source.title
+                title = title.rsplit(" - " + item_name, 1)[0] if title.endswith(" - " + item_name) else title
+            elif " - " in title:
+                title, item_name = title.rsplit(" - ", 1)
+
+        item_name = _normalize_source(item_name)
+
         # Exact URL dedup
         existing = conn.execute("SELECT id FROM raw_items WHERE source_url=?", (link,)).fetchone()
+        if existing:
+            continue
+
+        # Headline + source dedup (catches Google News duplicates with different URLs)
+        existing = conn.execute(
+            "SELECT id FROM raw_items WHERE original_headline=? AND source_name=?",
+            (title, item_name)
+        ).fetchone()
         if existing:
             continue
 
@@ -140,11 +190,11 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
         published = parse_published(entry)
         now = datetime.now(timezone.utc).isoformat()
 
-        cluster_id = assign_cluster(conn, title, link, name, category, published_at=published)
+        cluster_id = assign_cluster(conn, title, link, item_name, category, published_at=published)
 
         conn.execute(
             "INSERT INTO raw_items (id, source_url, source_name, original_headline, published_at, ingested_at, feed_url, category, cluster_id) VALUES (?,?,?,?,?,?,?,?,?)",
-            (item_id, link, name, title, published, now, url, category, cluster_id)
+            (item_id, link, item_name, title, published, now, url, category, cluster_id)
         )
         count += 1
 
@@ -156,6 +206,7 @@ async def search_sweep():
     cfg = load_config()
     queries = cfg.get("search", {}).get("queries", [])
     log.info("Running search sweep...")
+    ev("ingest_start", job="search")
     # Use Google News RSS as search proxy
     count = 0
     for query in queries:
@@ -166,6 +217,7 @@ async def search_sweep():
             count += n
         except Exception as e:
             log.warning(f"Search sweep error for '{query}': {e}")
+    ev("ingest_done", job="search", items=count)
     log.info(f"Search sweep ingested {count} new items")
 
 def _query_to_category(query: str) -> str:

@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WIRE / RIVER</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #0a0a0a;
+    color: #cccccc;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 12px;
+    line-height: 1.4;
+    -webkit-font-smoothing: antialiased;
+}
+
+a { color: #ffb000; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid #222;
+}
+
+.logo { font-size: 20px; font-weight: 700; color: #ffb000; letter-spacing: 4px; }
+.logo-sub { color: #555; font-size: 12px; letter-spacing: 2px; margin-left: 8px; }
+.back { color: #555; font-size: 11px; }
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto;
+    gap: 0;
+    min-height: calc(100vh - 45px);
+}
+
+.panel {
+    border: 1px solid #1a1a1a;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.panel-header {
+    padding: 8px 12px;
+    background: #0f0f0f;
+    border-bottom: 1px solid #1a1a1a;
+    font-size: 10px;
+    font-weight: 700;
+    color: #555;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.panel-body {
+    padding: 10px 12px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* ── Panel 1: Processes ─────────────────────────────────────────────── */
+.jobs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+.job-card {
+    border: 1px solid #1a1a1a;
+    padding: 10px;
+    background: #0d0d0d;
+}
+
+.job-name {
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffb000;
+    letter-spacing: 1px;
+    margin-bottom: 6px;
+}
+
+.job-field {
+    font-size: 10px;
+    color: #666;
+    margin-bottom: 2px;
+}
+
+.job-field span { color: #999; }
+
+.job-countdown {
+    font-size: 16px;
+    font-weight: 700;
+    color: #4a9e4a;
+    margin-top: 4px;
+}
+
+/* ── Panel 2: Event Stream ──────────────────────────────────────────── */
+.filter-bar {
+    display: flex;
+    gap: 2px;
+    flex-wrap: wrap;
+}
+
+.filter-btn {
+    padding: 2px 8px;
+    cursor: pointer;
+    color: #555;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.filter-btn:hover { color: #999; border-color: #444; }
+.filter-btn.active { color: #ffb000; border-color: #ffb000; }
+
+.pause-btn {
+    padding: 2px 8px;
+    cursor: pointer;
+    color: #555;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-left: auto;
+}
+
+.pause-btn:hover { color: #999; border-color: #444; }
+.pause-btn.active { color: #e04040; border-color: #e04040; }
+
+.event-list { list-style: none; }
+
+.event-item {
+    padding: 3px 0;
+    border-bottom: 1px solid #111;
+    font-size: 11px;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.ev-time { color: #444; white-space: nowrap; flex-shrink: 0; }
+.ev-tag {
+    font-size: 9px;
+    padding: 1px 5px;
+    letter-spacing: 1px;
+    font-weight: 700;
+    flex-shrink: 0;
+    min-width: 60px;
+    text-align: center;
+}
+
+.ev-tag.ingest   { color: #4a9e4a; border: 1px solid #2a5a2a; }
+.ev-tag.cluster  { color: #5a9ece; border: 1px solid #2a4a6e; }
+.ev-tag.rewrite  { color: #ce8e4a; border: 1px solid #6e4a2a; }
+.ev-tag.error    { color: #e04040; border: 1px solid #6e2a2a; }
+
+.ev-msg { color: #888; word-break: break-word; }
+
+/* ── Panel 3: Stats + Config ────────────────────────────────────────── */
+.stats-section {
+    margin-bottom: 14px;
+}
+
+.stats-title {
+    font-size: 9px;
+    color: #555;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    border-bottom: 1px solid #1a1a1a;
+    padding-bottom: 4px;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 11px;
+}
+
+.stat-label { color: #666; }
+.stat-value { color: #cccccc; font-weight: 700; }
+.stat-value.amber { color: #ffb000; }
+.stat-value.green { color: #4a9e4a; }
+
+/* ── Panel 4: Pipeline ──────────────────────────────────────────────── */
+.pipeline-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+}
+
+.pipeline-table th {
+    text-align: left;
+    color: #555;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 6px;
+    border-bottom: 1px solid #222;
+    position: sticky;
+    top: 0;
+    background: #0a0a0a;
+}
+
+.pipeline-table td {
+    padding: 4px 6px;
+    border-bottom: 1px solid #111;
+    color: #888;
+    max-width: 250px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.status-badge {
+    font-size: 9px;
+    padding: 1px 5px;
+    letter-spacing: 1px;
+    font-weight: 700;
+}
+
+.status-badge.rewritten { color: #4a9e4a; border: 1px solid #2a5a2a; }
+.status-badge.pending { color: #ffb000; border: 1px solid #554400; }
+
+.cat-badge {
+    font-size: 9px;
+    color: #666;
+    letter-spacing: 1px;
+}
+
+/* ── Panel 5: Source Scores ────────────────────────────────────────── */
+.panel-full {
+    grid-column: 1 / -1;
+}
+
+.scores-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 10px;
+}
+
+.scores-table th {
+    text-align: left;
+    color: #555;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 4px 6px;
+    border-bottom: 1px solid #222;
+    position: sticky;
+    top: 0;
+    background: #0a0a0a;
+    cursor: pointer;
+}
+
+.scores-table th:hover { color: #999; }
+
+.scores-table td {
+    padding: 4px 6px;
+    border-bottom: 1px solid #111;
+    color: #888;
+}
+
+.scores-table td.source-name { color: #ccc; }
+.score-total { color: #ffb000; font-weight: 700; }
+.score-free { color: #4a9e4a; }
+.score-metered { color: #ce8e4a; }
+.score-paywall { color: #e04040; }
+
+@media (max-width: 900px) {
+    .grid {
+        grid-template-columns: 1fr;
+        height: auto;
+    }
+    .panel { min-height: 250px; }
+}
+</style>
+</head>
+<body>
+
+<div class="top-bar">
+    <div>
+        <span class="logo">WIRE</span><span class="logo-sub">RIVER</span>
+    </div>
+    <a class="back" href="/">BACK TO WIRE</a>
+</div>
+
+<div class="grid">
+    <!-- Panel 1: Processes -->
+    <div class="panel">
+        <div class="panel-header">PROCESSES</div>
+        <div class="panel-body">
+            <div class="jobs-grid" id="jobs-grid">
+                <div class="job-card" id="job-rss">
+                    <div class="job-name">RSS</div>
+                    <div class="job-field">next: <span id="rss-next">--</span></div>
+                    <div class="job-field">interval: <span id="rss-interval">--</span></div>
+                    <div class="job-countdown" id="rss-countdown">--:--</div>
+                </div>
+                <div class="job-card" id="job-search">
+                    <div class="job-name">SEARCH</div>
+                    <div class="job-field">next: <span id="search-next">--</span></div>
+                    <div class="job-field">interval: <span id="search-interval">--</span></div>
+                    <div class="job-countdown" id="search-countdown">--:--</div>
+                </div>
+                <div class="job-card" id="job-rewrite">
+                    <div class="job-name">REWRITE</div>
+                    <div class="job-field">next: <span id="rewrite-next">--</span></div>
+                    <div class="job-field">interval: <span id="rewrite-interval">--</span></div>
+                    <div class="job-countdown" id="rewrite-countdown">--:--</div>
+                </div>
+                <div class="job-card" id="job-cleanup">
+                    <div class="job-name">CLEANUP</div>
+                    <div class="job-field">next: <span id="cleanup-next">--</span></div>
+                    <div class="job-field">interval: <span id="cleanup-interval">--</span></div>
+                    <div class="job-countdown" id="cleanup-countdown">--:--</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel 2: Event Stream -->
+    <div class="panel">
+        <div class="panel-header">
+            <span>EVENT STREAM</span>
+            <div style="display:flex;gap:4px;align-items:center;">
+                <div class="filter-bar">
+                    <button class="filter-btn active" data-filter="all">ALL</button>
+                    <button class="filter-btn" data-filter="ingest">INGEST</button>
+                    <button class="filter-btn" data-filter="cluster">CLUSTER</button>
+                    <button class="filter-btn" data-filter="rewrite">REWRITE</button>
+                    <button class="filter-btn" data-filter="error">ERRORS</button>
+                </div>
+                <button class="pause-btn" id="pause-btn">PAUSE</button>
+            </div>
+        </div>
+        <div class="panel-body" id="event-stream-body">
+            <ul class="event-list" id="event-list"></ul>
+        </div>
+    </div>
+
+    <!-- Panel 3: DB Stats + Config -->
+    <div class="panel">
+        <div class="panel-header">DB STATS + CONFIG</div>
+        <div class="panel-body">
+            <div class="stats-section">
+                <div class="stats-title">DATABASE</div>
+                <div class="stat-row"><span class="stat-label">clusters</span><span class="stat-value green" id="stat-clusters">--</span></div>
+                <div class="stat-row"><span class="stat-label">raw items</span><span class="stat-value" id="stat-raw">--</span></div>
+                <div class="stat-row"><span class="stat-label">pending rewrites</span><span class="stat-value amber" id="stat-pending">--</span></div>
+            </div>
+            <div class="stats-section">
+                <div class="stats-title">CONFIGURATION</div>
+                <div class="stat-row"><span class="stat-label">similarity threshold</span><span class="stat-value" id="cfg-threshold">--</span></div>
+                <div class="stat-row"><span class="stat-label">lookback hours</span><span class="stat-value" id="cfg-lookback">--</span></div>
+                <div class="stat-row"><span class="stat-label">AI model</span><span class="stat-value" id="cfg-model">--</span></div>
+                <div class="stat-row"><span class="stat-label">batch size</span><span class="stat-value" id="cfg-batch">--</span></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Panel 4: Pipeline -->
+    <div class="panel">
+        <div class="panel-header">PIPELINE</div>
+        <div class="panel-body" style="padding:0;">
+            <table class="pipeline-table">
+                <thead>
+                    <tr>
+                        <th>SOURCE</th>
+                        <th>HEADLINE</th>
+                        <th>CAT</th>
+                        <th>CLUSTER</th>
+                        <th>STATUS</th>
+                    </tr>
+                </thead>
+                <tbody id="pipeline-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Panel 5: Source Quality Scores -->
+    <div class="panel panel-full">
+        <div class="panel-header">SOURCE QUALITY SCORES</div>
+        <div class="panel-body" style="padding:0; max-height: 400px;">
+            <table class="scores-table">
+                <thead>
+                    <tr>
+                        <th data-sort="source">SOURCE</th>
+                        <th data-sort="total">TOTAL</th>
+                        <th data-sort="reliability">RELIABILITY</th>
+                        <th data-sort="access">ACCESS</th>
+                        <th data-sort="reputation">REPUTATION</th>
+                    </tr>
+                </thead>
+                <tbody id="scores-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+let paused = false;
+let eventFilter = 'all';
+let jobNextRuns = {};
+
+// ── Filter buttons ──────────────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        eventFilter = btn.dataset.filter;
+        fetchEvents();
+    });
+});
+
+document.getElementById('pause-btn').addEventListener('click', () => {
+    paused = !paused;
+    const btn = document.getElementById('pause-btn');
+    btn.textContent = paused ? 'RESUME' : 'PAUSE';
+    btn.classList.toggle('active', paused);
+});
+
+// ── Formatting ──────────────────────────────────────────────────────
+function fmtTime(iso) {
+    if (!iso) return '--:--:--';
+    const d = new Date(iso);
+    return d.toLocaleTimeString('en-US', { hour12: false });
+}
+
+function fmtCountdown(iso) {
+    if (!iso) return '--:--';
+    const diff = new Date(iso) - new Date();
+    if (diff <= 0) return 'NOW';
+    const m = Math.floor(diff / 60000);
+    const s = Math.floor((diff % 60000) / 1000);
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function esc(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function eventTag(type) {
+    if (type.startsWith('ingest')) return 'ingest';
+    if (type.startsWith('cluster')) return 'cluster';
+    if (type === 'rewrite') return 'rewrite';
+    if (type === 'error') return 'error';
+    return 'ingest';
+}
+
+function eventMsg(ev) {
+    switch (ev.type) {
+        case 'ingest_start': return `${ev.job.toUpperCase()} poll started`;
+        case 'ingest_done': return `${ev.job.toUpperCase()} poll done — ${ev.items} items`;
+        case 'cluster_hit': return `merged (${ev.similarity}) "${trunc(ev.headline, 50)}"`;
+        case 'cluster_new': return `new cluster: "${trunc(ev.headline, 50)}" [${ev.category}]`;
+        case 'rewrite': return `"${trunc(ev.before, 30)}" → "${trunc(ev.after, 30)}" [${ev.category}]`;
+        case 'error': return `[${ev.source}] ${ev.message}`;
+        default: return JSON.stringify(ev);
+    }
+}
+
+function trunc(s, n) {
+    if (!s) return '';
+    return s.length > n ? s.substring(0, n) + '...' : s;
+}
+
+// ── Fetch functions ─────────────────────────────────────────────────
+async function fetchStatus() {
+    try {
+        const resp = await fetch('/api/river/status');
+        const data = await resp.json();
+
+        // Jobs
+        for (const id of ['rss', 'search', 'rewrite', 'cleanup']) {
+            const job = data.jobs[id];
+            if (job) {
+                jobNextRuns[id] = job.next_run;
+                document.getElementById(`${id}-next`).textContent = fmtTime(job.next_run);
+                document.getElementById(`${id}-interval`).textContent = job.interval;
+            }
+        }
+
+        // DB stats
+        document.getElementById('stat-clusters').textContent = data.db.clusters;
+        document.getElementById('stat-raw').textContent = data.db.raw_items;
+        document.getElementById('stat-pending').textContent = data.db.pending_rewrites;
+
+        // Config
+        document.getElementById('cfg-threshold').textContent = data.config.similarity_threshold;
+        document.getElementById('cfg-lookback').textContent = data.config.lookback_hours;
+        document.getElementById('cfg-model').textContent = data.config.model;
+        document.getElementById('cfg-batch').textContent = data.config.batch_size;
+    } catch (e) {
+        console.error('Status fetch error:', e);
+    }
+}
+
+async function fetchEvents() {
+    if (paused) return;
+    try {
+        const filterParam = eventFilter !== 'all' ? `&event_type=${eventFilter}` : '';
+        // For error filter, use 'error' type
+        const typeMap = { ingest: '', cluster: '', rewrite: 'rewrite', error: 'error' };
+        const resp = await fetch(`/api/river/events?limit=200`);
+        const data = await resp.json();
+
+        let events = data.events;
+        if (eventFilter !== 'all') {
+            events = events.filter(ev => {
+                const tag = eventTag(ev.type);
+                return tag === eventFilter;
+            });
+        }
+
+        const list = document.getElementById('event-list');
+        list.innerHTML = events.map(ev => {
+            const tag = eventTag(ev.type);
+            return `<li class="event-item">
+                <span class="ev-time">${fmtTime(ev.ts)}</span>
+                <span class="ev-tag ${tag}">${ev.type.toUpperCase()}</span>
+                <span class="ev-msg">${esc(eventMsg(ev))}</span>
+            </li>`;
+        }).join('');
+    } catch (e) {
+        console.error('Events fetch error:', e);
+    }
+}
+
+async function fetchPipeline() {
+    try {
+        const resp = await fetch('/api/river/pipeline?limit=50');
+        const data = await resp.json();
+
+        const tbody = document.getElementById('pipeline-body');
+        tbody.innerHTML = data.items.map(item => {
+            const statusClass = item.rewrite_status === 'REWRITTEN' ? 'rewritten' : 'pending';
+            return `<tr>
+                <td>${esc(item.source)}</td>
+                <td title="${esc(item.headline)}">${esc(trunc(item.headline, 50))}</td>
+                <td><span class="cat-badge">${esc(item.cluster_category || item.feed_category)}</span></td>
+                <td style="color:#555;">${esc(item.cluster_id || '--')}</td>
+                <td><span class="status-badge ${statusClass}">${item.rewrite_status}</span></td>
+            </tr>`;
+        }).join('');
+    } catch (e) {
+        console.error('Pipeline fetch error:', e);
+    }
+}
+
+// ── Countdown ticker ────────────────────────────────────────────────
+function updateCountdowns() {
+    for (const id of ['rss', 'search', 'rewrite', 'cleanup']) {
+        const el = document.getElementById(`${id}-countdown`);
+        el.textContent = fmtCountdown(jobNextRuns[id]);
+    }
+}
+
+// ── Source Scores ────────────────────────────────────────────────────
+let scoresData = [];
+let scoreSort = { key: 'total', asc: false };
+
+function accessClass(val) {
+    if (val >= 100) return 'score-free';
+    if (val >= 60) return 'score-metered';
+    return 'score-paywall';
+}
+
+async function fetchScores() {
+    try {
+        const resp = await fetch('/api/scores');
+        const data = await resp.json();
+        scoresData = data.scores;
+        renderScores();
+    } catch (e) {
+        console.error('Scores fetch error:', e);
+    }
+}
+
+function renderScores() {
+    const sorted = [...scoresData].sort((a, b) => {
+        const key = scoreSort.key;
+        if (key === 'source') {
+            return scoreSort.asc ? a.source.localeCompare(b.source) : b.source.localeCompare(a.source);
+        }
+        return scoreSort.asc ? a[key] - b[key] : b[key] - a[key];
+    });
+
+    const tbody = document.getElementById('scores-body');
+    tbody.innerHTML = sorted.map(s => `<tr>
+        <td class="source-name">${esc(s.source)}</td>
+        <td class="score-total">${s.total}</td>
+        <td>${s.reliability}</td>
+        <td class="${accessClass(s.access)}">${s.access}</td>
+        <td>${s.reputation}</td>
+    </tr>`).join('');
+}
+
+document.querySelectorAll('.scores-table th').forEach(th => {
+    th.addEventListener('click', () => {
+        const key = th.dataset.sort;
+        if (scoreSort.key === key) {
+            scoreSort.asc = !scoreSort.asc;
+        } else {
+            scoreSort.key = key;
+            scoreSort.asc = key === 'source';
+        }
+        renderScores();
+    });
+});
+
+// ── Init ────────────────────────────────────────────────────────────
+fetchStatus();
+fetchEvents();
+fetchPipeline();
+fetchScores();
+
+setInterval(fetchStatus, 5000);
+setInterval(fetchEvents, 3000);
+setInterval(fetchPipeline, 10000);
+setInterval(updateCountdowns, 1000);
+</script>
+</body>
+</html>

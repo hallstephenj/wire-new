@@ -135,6 +135,9 @@ header {
     color: #444;
     padding-left: 16px;
     margin-top: 1px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
 }
 
 .also a {
@@ -143,6 +146,58 @@ header {
 }
 
 .also a:hover { color: #888; text-decoration: underline; }
+
+.expand-btn {
+    background: none;
+    border: 1px solid #333;
+    color: #555;
+    font-family: inherit;
+    font-size: 9px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+.expand-btn:hover { color: #999; border-color: #555; }
+
+.items-detail {
+    padding-left: 16px;
+    margin-top: 4px;
+    display: none;
+}
+
+.items-detail.open { display: block; }
+
+.item-row {
+    font-size: 11px;
+    padding: 2px 0;
+    border-bottom: 1px solid #0f0f0f;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.item-row a {
+    color: #888;
+    text-decoration: none;
+}
+
+.item-row a:hover { color: #ccc; text-decoration: underline; }
+
+.item-source {
+    color: #4a9e4a;
+    font-size: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.item-time {
+    color: #333;
+    font-size: 10px;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
 
 .category-tag {
     font-size: 9px;
@@ -350,7 +405,18 @@ function renderStory(s) {
         `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`
     ).join(' · ');
 
-    const alsoLine = others ? `<div class="also">also: ${others}</div>` : '';
+    const hasItems = s.items && s.items.length > 1;
+    const expandBtn = hasItems ? `<button class="expand-btn" onclick="toggleItems('${s.id}')">+</button>` : '';
+    const alsoLine = others ? `<div class="also">also: ${others}${expandBtn}</div>` : '';
+
+    let itemsDetail = '';
+    if (hasItems) {
+        const rows = s.items.map(it =>
+            `<div class="item-row"><span class="item-source">${esc(it.source)}</span><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.headline)}</a><span class="item-time">${esc(formatTime(it.published_at))}</span></div>`
+        ).join('');
+        itemsDetail = `<div class="items-detail" id="items-${s.id}">${rows}</div>`;
+    }
+
     const countDisplay = s.source_count > 1 ? `<span class="count">+${s.source_count}</span>` : '';
     const timeAgo = formatTime(s.published_at || s.first_seen);
     const fullDate = formatFullDate(s.published_at || s.first_seen);
@@ -364,6 +430,7 @@ function renderStory(s) {
             <span class="meta"><span class="source">via ${esc(s.source)}</span>${countDisplay}<span class="timestamp" title="${esc(fullDate)}">${esc(timeAgo)}</span></span>
         </div>
         ${alsoLine}
+        ${itemsDetail}
     </div>`;
 }
 
@@ -372,6 +439,16 @@ function esc(s) {
     const d = document.createElement('div');
     d.textContent = s;
     return d.innerHTML;
+}
+
+function toggleItems(id) {
+    const el = document.getElementById('items-' + id);
+    if (!el) return;
+    const isOpen = el.classList.toggle('open');
+    // Update button text
+    const story = el.closest('.story');
+    const btn = story.querySelector('.expand-btn');
+    if (btn) btn.textContent = isOpen ? '−' : '+';
 }
 
 async function fetchStories() {

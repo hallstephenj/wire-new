@@ -56,6 +56,7 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_clusters_source_count ON story_clusters(source_count DESC);
     CREATE INDEX IF NOT EXISTS idx_clusters_last_updated ON story_clusters(last_updated DESC);
     CREATE INDEX IF NOT EXISTS idx_raw_source_url ON raw_items(source_url);
+    CREATE INDEX IF NOT EXISTS idx_raw_headline_source ON raw_items(original_headline, source_name);
     """)
     # Migration: add published_at to story_clusters if missing
     cols = [r[1] for r in conn.execute("PRAGMA table_info(story_clusters)").fetchall()]

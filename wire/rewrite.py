@@ -7,17 +7,21 @@ import anthropic
 
 from wire.db import get_conn
 from wire.config import load_config
+from wire.events import push as ev
 
 log = logging.getLogger("wire.rewrite")
 
-SYSTEM_PROMPT = """You are a Bloomberg terminal news wire editor. You have two jobs:
+SYSTEM_PROMPT = """You are a Bloomberg terminal news wire editor. You have two jobs for each cluster of headlines about the same story:
 
-JOB 1 — REWRITE: Rewrite each headline in Bloomberg wire style:
-- Concise (max 80 chars preferred, 100 max)
-- Factual/neutral, present tense, no articles where possible, active voice
-- No clickbait, no questions
+JOB 1 — REWRITE: Synthesize the cluster of headlines into a single Bloomberg-wire-style headline.
+- ALL CAPS, concise, factual, present tense, active voice
+- No clickbait, no questions, no articles where possible
+- Max 120 characters (shorter is better)
+- If one specific publication is clearly the original source or broke the story, append ": SOURCE" at the end (e.g. "OPENAI NOW TARGETING MORE THAN $280B IN REVENUE BY 2030: CNBC")
+- If multiple publications reported it independently with no clear original source, do NOT append a source
+- The source attribution should use the short common name (e.g. CNBC, not "CNBC News")
 
-JOB 2 — CATEGORIZE: Assign each headline to exactly ONE category:
+JOB 2 — CATEGORIZE: Assign each cluster to exactly ONE category:
 - TECH: Technology, software, hardware, AI, cybersecurity, startups, gadgets, social media platforms, gaming, space/rockets, science discoveries
 - MARKETS: Stock markets, earnings, IPOs, interest rates, crypto/bitcoin, financial instruments, economic indicators, company valuations
 - POLITICS: Government, legislation, elections, political parties, policy, courts/legal rulings, regulation
@@ -26,26 +30,22 @@ JOB 2 — CATEGORIZE: Assign each headline to exactly ONE category:
 
 IMPORTANT: Stories about tariffs, trade policy, or government regulation are POLITICS unless they specifically focus on stock price impact (then MARKETS). Stories about science, space, or medicine without a tech angle are GENERAL. Product deal roundups and "best of" lists are GENERAL. Blog meta-posts ("Adding TILs to my blog") are GENERAL.
 
-For each numbered headline, respond with EXACTLY this format:
-1. CATEGORY | Rewritten headline
-2. CATEGORY | Rewritten headline
+For each numbered cluster, respond with EXACTLY this format:
+1. CATEGORY | REWRITTEN HEADLINE
+2. CATEGORY | REWRITTEN HEADLINE
 ...
 
-Example:
-1. TECH | Apple Plans Low-Cost MacBook in Multiple Colors for 2026
-2. POLITICS | Trump Vows New Tariffs After Supreme Court Strikes Down Emergency Powers
-3. MARKETS | OpenAI Revenue Forecast Tops $280B by 2030
-4. GENERAL | Winter Storm Threatens Northeast With More Snow This Weekend"""
-
-_pending = []
-_lock = asyncio.Lock()
-_last_flush = None
+Examples:
+1. TECH | APPLE PLANS LOW-COST MACBOOK IN MULTIPLE COLORS FOR 2026: BLOOMBERG
+2. POLITICS | TRUMP VOWS NEW TARIFFS AFTER SUPREME COURT STRIKES DOWN EMERGENCY POWERS
+3. MARKETS | OPENAI NOW TARGETING MORE THAN $280B IN REVENUE BY 2030: CNBC
+4. WORLD | EARTHQUAKE KILLS AT LEAST 200 IN WESTERN TURKEY"""
 
 VALID_CATEGORIES = {"tech", "markets", "politics", "world", "general"}
 
 
 async def rewrite_pending():
-    """Batch rewrite and categorize headlines."""
+    """Batch rewrite and categorize clustered stories (source_count >= 2)."""
     cfg = load_config()
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -53,21 +53,52 @@ async def rewrite_pending():
         return
 
     conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Only rewrite clusters with 2+ sources whose headline still matches
+    # a raw item headline (i.e. hasn't been rewritten yet)
     rows = conn.execute("""
-        SELECT sc.id, sc.rewritten_headline
+        SELECT sc.id, sc.rewritten_headline, sc.source_count
         FROM story_clusters sc
-        LEFT JOIN raw_items ri ON ri.cluster_id = sc.id
         WHERE sc.expires_at > ?
-        AND sc.rewritten_headline = ri.original_headline
+        AND sc.source_count >= 2
+        AND EXISTS (
+            SELECT 1 FROM raw_items ri
+            WHERE ri.cluster_id = sc.id
+            AND ri.original_headline = sc.rewritten_headline
+        )
         LIMIT ?
-    """, (datetime.now(timezone.utc).isoformat(), cfg["ai"]["batch_size"])).fetchall()
+    """, (now, cfg["ai"]["batch_size"])).fetchall()
 
     if not rows:
         conn.close()
         return
 
-    headlines = {r["id"]: r["rewritten_headline"] for r in rows}
-    numbered = "\n".join(f"{i+1}. {h}" for i, (cid, h) in enumerate(headlines.items()))
+    # For each cluster, gather all headlines from its raw_items
+    clusters = []
+    for r in rows:
+        cluster_id = r["id"]
+        items = conn.execute(
+            "SELECT original_headline, source_name FROM raw_items WHERE cluster_id=? ORDER BY published_at ASC",
+            (cluster_id,)
+        ).fetchall()
+        if items:
+            clusters.append({
+                "id": cluster_id,
+                "current_headline": r["rewritten_headline"],
+                "headlines": [(i["original_headline"], i["source_name"]) for i in items],
+            })
+
+    if not clusters:
+        conn.close()
+        return
+
+    # Build the prompt: each numbered cluster with all its headlines
+    parts = []
+    for i, c in enumerate(clusters):
+        headline_lines = "\n".join(f"  - [{src}] {hl}" for hl, src in c["headlines"])
+        parts.append(f"{i+1}. Cluster headlines:\n{headline_lines}")
+    numbered = "\n\n".join(parts)
 
     try:
         client = anthropic.Anthropic(api_key=api_key)
@@ -78,26 +109,25 @@ async def rewrite_pending():
             messages=[{"role": "user", "content": numbered}]
         )
         text = resp.content[0].text.strip()
-        lines = text.split("\n")
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
 
-        cluster_ids = list(headlines.keys())
         rewrites = 0
         recats = 0
+        line_idx = 0
 
-        for i, line in enumerate(lines):
-            if i >= len(cluster_ids):
+        for i, cluster in enumerate(clusters):
+            if line_idx >= len(lines):
                 break
 
-            line = line.strip()
-            if not line:
-                continue
+            line = lines[line_idx]
+            line_idx += 1
 
             # Strip numbering prefix
             for prefix in [f"{i+1}.", f"{i+1})"]:
                 if line.startswith(prefix):
                     line = line[len(prefix):].strip()
 
-            # Parse "CATEGORY | Headline"
+            # Parse "CATEGORY | HEADLINE"
             category = None
             rewritten = line
             if "|" in line:
@@ -107,21 +137,21 @@ async def rewrite_pending():
                     category = cat_candidate
                     rewritten = parts[1].strip()
 
-            # Update headline
-            if rewritten and len(rewritten) <= 100:
+            if rewritten and len(rewritten) <= 120:
+                ev("rewrite", before=cluster["current_headline"], after=rewritten, category=category or "unchanged")
                 conn.execute("UPDATE story_clusters SET rewritten_headline=? WHERE id=?",
-                           (rewritten, cluster_ids[i]))
+                           (rewritten, cluster["id"]))
                 rewrites += 1
 
-            # Update category if AI classified it
             if category:
                 conn.execute("UPDATE story_clusters SET category=? WHERE id=?",
-                           (category, cluster_ids[i]))
+                           (category, cluster["id"]))
                 recats += 1
 
         conn.commit()
         log.info(f"Rewrote {rewrites} headlines, recategorized {recats}")
     except Exception as e:
+        ev("error", source="rewrite", message=str(e))
         log.error(f"Rewrite error: {e}")
     finally:
         conn.close()
