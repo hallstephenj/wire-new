@@ -3,7 +3,7 @@ server:
   port: 8000
 
 database:
-  path: "wire.db"
+  path: "data/wire.db"
 
 polling:
   rss_interval_minutes: 5

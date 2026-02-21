@@ -9,6 +9,8 @@ def get_db_path():
     if _DB_PATH is None:
         cfg = load_config()
         _DB_PATH = Path(__file__).resolve().parent.parent / cfg["database"]["path"]
+        # Ensure parent directory exists
+        _DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     return _DB_PATH
 
 def get_conn():

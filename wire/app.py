@@ -21,10 +21,60 @@ log = logging.getLogger("wire")
 
 scheduler = AsyncIOScheduler()
 
+async def startup_backfill():
+    """Ensure the DB has at least a baseline of stories on startup."""
+    conn = get_conn()
+    cluster_count = conn.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]
+    conn.close()
+
+    if cluster_count >= 100:
+        log.info(f"Startup: {cluster_count} clusters found, skipping backfill")
+        return
+
+    log.info(f"Startup: only {cluster_count} clusters, running backfill...")
+
+    # Run multiple poll + search cycles to build up content
+    for i in range(3):
+        log.info(f"Backfill pass {i+1}/3: polling feeds...")
+        try:
+            await poll_feeds()
+        except Exception as e:
+            log.warning(f"Backfill poll error: {e}")
+        try:
+            await search_sweep()
+        except Exception as e:
+            log.warning(f"Backfill search error: {e}")
+
+    # Run rewrite cycles to process all pending headlines
+    for i in range(20):
+        conn = get_conn()
+        pending = conn.execute("""
+            SELECT COUNT(*) as c FROM story_clusters sc
+            LEFT JOIN raw_items ri ON ri.cluster_id = sc.id
+            WHERE sc.rewritten_headline = ri.original_headline
+        """).fetchone()["c"]
+        conn.close()
+        if pending == 0:
+            break
+        log.info(f"Backfill rewrite pass {i+1}: {pending} pending...")
+        try:
+            await rewrite_pending()
+        except Exception as e:
+            log.warning(f"Backfill rewrite error: {e}")
+
+    conn = get_conn()
+    final = conn.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]
+    conn.close()
+    log.info(f"Backfill complete: {final} clusters")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     cfg = load_config()
+
+    # Backfill if DB is empty/sparse
+    await startup_backfill()
 
     scheduler.add_job(poll_feeds, "interval", minutes=cfg["polling"]["rss_interval_minutes"], id="rss", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(search_sweep, "interval", minutes=cfg["polling"]["search_interval_minutes"], id="search", next_run_time=datetime.now(timezone.utc))
