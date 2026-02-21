@@ -547,8 +547,8 @@ header {
         </div>
         <div class="controls">
             <div class="tabs" id="sort-tabs">
-                <button class="tab active" data-sort="hot">HOT</button>
-                <button class="tab" data-sort="new">NEW</button>
+                <button class="tab active" data-sort="hot">TICKER</button>
+                <button class="tab" data-sort="new">LATEST</button>
             </div>
             <span class="separator">│</span>
             <div class="tabs" id="cat-tabs">
@@ -774,7 +774,7 @@ function renderStory(s) {
     const timeAgo = formatTime(s.published_at || s.first_seen);
     const fullDate = formatFullDate(s.published_at || s.first_seen);
 
-    // Use original headline for NEW sort, rewritten for HOT
+    // Use original headline for LATEST sort, rewritten for TICKER
     const displayHeadline = (currentSort === 'new' && s.original_headline) ? s.original_headline : s.headline;
 
     const energy = wireEnergy(s);
