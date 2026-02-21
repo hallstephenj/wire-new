@@ -100,7 +100,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
                     best_topic_idx = i
 
         # ── Decision: combine both signals ───────────────────────────────
-        # Strong TF-IDF match alone is enough
+        # Strong TF-IDF match alone — headlines must be very similar
         if best_tfidf_sim >= tfidf_threshold:
             cluster_id = rows[best_tfidf_idx]["id"]
             ev("cluster_hit", headline=headline, matched=rows[best_tfidf_idx]["rewritten_headline"],
