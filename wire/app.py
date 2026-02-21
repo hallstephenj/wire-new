@@ -74,8 +74,8 @@ async def lifespan(app: FastAPI):
     init_db()
     cfg = load_config()
 
-    # Backfill if DB is empty/sparse
-    await startup_backfill()
+    # Backfill in background so it doesn't block healthcheck
+    asyncio.create_task(startup_backfill())
 
     scheduler.add_job(poll_feeds, "interval", minutes=cfg["polling"]["rss_interval_minutes"], id="rss", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(search_sweep, "interval", minutes=cfg["polling"]["search_interval_minutes"], id="search", next_run_time=datetime.now(timezone.utc))
