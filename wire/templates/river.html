@@ -332,6 +332,11 @@ a:hover { text-decoration: underline; }
                     <div class="job-field">interval: <span id="cleanup-interval">--</span></div>
                     <div class="job-countdown" id="cleanup-countdown">--:--</div>
                 </div>
+                <div class="job-card" id="job-recluster" style="cursor:pointer;border-color:#ffb000;" onclick="doRecluster()">
+                    <div class="job-name" style="color:#ffb000;">⟳ RECLUSTER</div>
+                    <div class="job-field" id="recluster-status">click to rebuild</div>
+                    <div class="job-countdown" id="recluster-result">--</div>
+                </div>
             </div>
         </div>
     </div>
@@ -416,6 +421,23 @@ a:hover { text-decoration: underline; }
 </div>
 
 <script>
+async function doRecluster() {
+    const status = document.getElementById('recluster-status');
+    const result = document.getElementById('recluster-result');
+    status.textContent = 'rebuilding...';
+    result.textContent = '⏳';
+    try {
+        const r = await fetch('/api/recluster', {method:'POST'});
+        const d = await r.json();
+        status.textContent = `${d.items} items → ${d.clusters} clusters`;
+        result.textContent = '✓ done';
+        setTimeout(() => { result.textContent = '--'; }, 5000);
+    } catch(e) {
+        status.textContent = 'error: ' + e.message;
+        result.textContent = '✗';
+    }
+}
+
 let paused = false;
 let eventFilter = 'all';
 let jobNextRuns = {};

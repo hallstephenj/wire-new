@@ -13,6 +13,7 @@ from wire.db import init_db, get_conn
 from wire.config import load_config
 from wire.ingest import poll_feeds, search_sweep
 from wire.rewrite import rewrite_pending
+from wire.cluster import assign_cluster
 from wire.events import snapshot as events_snapshot
 from wire.scores import all_scores
 
@@ -254,6 +255,44 @@ async def river_pipeline(limit: int = Query(50, ge=1, le=200)):
             "ingested_at": r["ingested_at"],
         })
     return {"items": items}
+
+@app.post("/api/recluster")
+async def recluster():
+    """Dedupe raw_items and rebuild all clusters from scratch."""
+    conn = get_conn()
+    try:
+        # Dedupe raw_items
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.execute("""
+            DELETE FROM raw_items WHERE rowid NOT IN (
+                SELECT MIN(rowid) FROM raw_items GROUP BY original_headline, source_name
+            )
+        """)
+        conn.execute("DELETE FROM cluster_sources")
+        conn.execute("DELETE FROM story_clusters")
+        conn.execute("UPDATE raw_items SET cluster_id = NULL")
+        conn.commit()
+        conn.execute("PRAGMA foreign_keys=ON")
+
+        items = conn.execute("""
+            SELECT id, original_headline, source_url, source_name, category, published_at
+            FROM raw_items ORDER BY published_at ASC NULLS LAST
+        """).fetchall()
+
+        for i, item in enumerate(items):
+            cid = assign_cluster(conn, item["original_headline"], item["source_url"],
+                                 item["source_name"], item["category"], published_at=item["published_at"])
+            conn.execute("UPDATE raw_items SET cluster_id=? WHERE id=?", (cid, item["id"]))
+            if (i + 1) % 200 == 0:
+                conn.commit()
+        conn.commit()
+
+        total = conn.execute("SELECT COUNT(*) FROM story_clusters").fetchone()[0]
+        by_cat = conn.execute("SELECT category, COUNT(*) FROM story_clusters GROUP BY category").fetchall()
+        return {"status": "ok", "clusters": total, "items": len(items),
+                "categories": {r[0]: r[1] for r in by_cat}}
+    finally:
+        conn.close()
 
 @app.get("/api/scores")
 async def scores():
