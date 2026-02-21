@@ -12,6 +12,90 @@ from wire.cluster import assign_cluster
 
 log = logging.getLogger("wire.ingest")
 
+# ── Content-based category classification ─────────────────────────────────
+# When a general-purpose source (NYT, Reuters, etc.) is in the tech feed,
+# we need to verify the headline is actually tech-related.
+
+TECH_KEYWORDS = {
+    "ai", "artificial intelligence", "algorithm", "android", "api", "app",
+    "apple", "autonomous", "bitcoin", "blockchain", "browser", "bug", "byte",
+    "chatbot", "chatgpt", "chip", "chipmaker", "claude", "cloud", "code",
+    "computer", "computing", "crypto", "cryptocurrency", "cyber", "data",
+    "database", "deepfake", "developer", "digital", "drone", "elon musk",
+    "encryption", "ethernet", "facebook", "firmware", "gemini", "github",
+    "google", "gpu", "hack", "hardware", "intel", "internet", "ios",
+    "iphone", "laptop", "linux", "llm", "machine learning", "malware",
+    "meta", "microsoft", "model", "neural", "nvidia", "openai", "open source",
+    "password", "phishing", "pixel", "platform", "privacy", "processor",
+    "programming", "quantum", "ransomware", "robot", "robotics", "saas",
+    "samsung", "semiconductor", "server", "silicon", "smartphone", "software",
+    "spacex", "startup", "streaming", "tech", "technology", "tesla", "tiktok",
+    "twitter", "uber", "venture capital", "virtual reality", "vpn", "web",
+    "wifi", "windows", "x.com", "youtube", "zero-day",
+}
+
+MARKETS_KEYWORDS = {
+    "stock", "shares", "earnings", "revenue", "profit", "quarterly", "ipo",
+    "nasdaq", "dow", "s&p", "fed", "interest rate", "inflation", "gdp",
+    "bond", "yield", "treasury", "investor", "dividend", "market cap",
+    "bull", "bear", "rally", "crash", "trading", "wall street", "forex",
+    "commodity", "oil price", "gold price", "etf", "hedge fund",
+}
+
+POLITICS_KEYWORDS = {
+    "congress", "senate", "house", "president", "white house", "democrat",
+    "republican", "gop", "election", "vote", "ballot", "legislation",
+    "bill", "law", "regulation", "executive order", "supreme court",
+    "impeach", "campaign", "lobby", "partisan", "bipartisan", "caucus",
+    "filibuster", "amendment",
+}
+
+WORLD_KEYWORDS = {
+    "war", "conflict", "troops", "military", "nato", "united nations",
+    "embassy", "diplomat", "sanctions", "ceasefire", "refugee", "humanitarian",
+    "earthquake", "tsunami", "hurricane", "flood", "famine",
+}
+
+# Sources that publish across many topics — these need content filtering
+GENERAL_SOURCES = {
+    "Bloomberg", "New York Times", "Reuters", "Financial Times",
+    "Washington Post", "The Guardian", "CNBC", "BBC", "BBC World",
+    "Axios", "Forbes", "Fortune", "NBC News", "Business Insider",
+    "The Atlantic", "Semafor", "South China Morning Post", "Nikkei Asia",
+    "Nature", "Google News", "Al Jazeera", "Fox Business",
+}
+
+
+def classify_headline(title: str, feed_category: str, source_name: str) -> str:
+    """
+    For general-purpose sources, verify the headline matches the feed category.
+    Specialist sources (TechCrunch, Ars Technica, etc.) keep their feed category.
+    """
+    if source_name not in GENERAL_SOURCES:
+        return feed_category
+
+    title_lower = title.lower()
+
+    def score(keywords):
+        return sum(1 for kw in keywords if kw in title_lower)
+
+    scores = {
+        "tech": score(TECH_KEYWORDS),
+        "markets": score(MARKETS_KEYWORDS),
+        "politics": score(POLITICS_KEYWORDS),
+        "world": score(WORLD_KEYWORDS),
+    }
+
+    best = max(scores, key=scores.get)
+
+    # If the best category has at least 1 keyword match, use it
+    if scores[best] > 0:
+        return best
+
+    # No keyword matches at all — keep the feed category
+    # (better to show it somewhere than drop it)
+    return feed_category
+
 def parse_published(entry) -> str:
     if hasattr(entry, "published_parsed") and entry.published_parsed:
         return datetime(*entry.published_parsed[:6], tzinfo=timezone.utc).isoformat()
@@ -56,11 +140,14 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
         published = parse_published(entry)
         now = datetime.now(timezone.utc).isoformat()
 
-        cluster_id = assign_cluster(conn, title, link, name, category, published_at=published)
+        # Classify based on content for general-purpose sources
+        effective_category = classify_headline(title, category, name)
+
+        cluster_id = assign_cluster(conn, title, link, name, effective_category, published_at=published)
 
         conn.execute(
             "INSERT INTO raw_items (id, source_url, source_name, original_headline, published_at, ingested_at, feed_url, category, cluster_id) VALUES (?,?,?,?,?,?,?,?,?)",
-            (item_id, link, name, title, published, now, url, category, cluster_id)
+            (item_id, link, name, title, published, now, url, effective_category, cluster_id)
         )
         count += 1
 
