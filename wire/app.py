@@ -46,7 +46,7 @@ async def index():
 @app.get("/api/stories")
 async def get_stories(
     sort: str = Query("hot", pattern="^(hot|new)$"),
-    category: str = Query("all", pattern="^(all|markets|tech|politics|world)$"),
+    category: str = Query("all", pattern="^(all|markets|tech|politics|world|general)$"),
     since: str | None = None,
     limit: int = Query(100, ge=1, le=500),
 ):
@@ -56,7 +56,10 @@ async def get_stories(
     where = ["sc.expires_at > ?"]
     params = [now]
 
-    if category != "all":
+    if category == "all":
+        # Exclude "general" bucket from the all view
+        where.append("sc.category != 'general'")
+    else:
         where.append("sc.category = ?")
         params.append(category)
 

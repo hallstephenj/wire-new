@@ -140,14 +140,11 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
         published = parse_published(entry)
         now = datetime.now(timezone.utc).isoformat()
 
-        # Classify based on content for general-purpose sources
-        effective_category = classify_headline(title, category, name)
-
-        cluster_id = assign_cluster(conn, title, link, name, effective_category, published_at=published)
+        cluster_id = assign_cluster(conn, title, link, name, category, published_at=published)
 
         conn.execute(
             "INSERT INTO raw_items (id, source_url, source_name, original_headline, published_at, ingested_at, feed_url, category, cluster_id) VALUES (?,?,?,?,?,?,?,?,?)",
-            (item_id, link, name, title, published, now, url, effective_category, cluster_id)
+            (item_id, link, name, title, published, now, url, category, cluster_id)
         )
         count += 1
 
