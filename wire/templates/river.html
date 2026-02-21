@@ -285,11 +285,86 @@ a:hover { text-decoration: underline; }
 .score-paywall { color: #e04040; }
 
 @media (max-width: 900px) {
+    body { font-size: 13px; }
+
+    .top-bar { padding: 12px 12px; }
+    .logo { font-size: 18px; }
+
     .grid {
-        grid-template-columns: 1fr;
-        height: auto;
+        display: flex;
+        flex-direction: column;
+        min-height: auto;
     }
-    .panel { min-height: 250px; }
+
+    .panel {
+        min-height: 0;
+        max-height: none;
+        border-left: none;
+        border-right: none;
+    }
+
+    .panel-body { padding: 10px; }
+
+    /* Processes: single column on small screens */
+    .jobs-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+    }
+
+    .job-card { padding: 8px; }
+    .job-name { font-size: 11px; }
+    .job-field { font-size: 10px; }
+    .job-countdown { font-size: 14px; }
+
+    /* Event stream: stack filter controls */
+    .panel-header {
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 8px 10px;
+    }
+
+    .filter-bar {
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .filter-btn, .pause-btn {
+        font-size: 10px;
+        padding: 4px 10px;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .event-item {
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 5px 0;
+        font-size: 12px;
+    }
+
+    .ev-tag { font-size: 10px; }
+    .ev-msg { font-size: 12px; }
+
+    /* Stats */
+    .stat-row { font-size: 12px; padding: 4px 0; }
+
+    /* Tables: horizontal scroll */
+    .pipeline-table, .scores-table {
+        font-size: 11px;
+        display: block;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .pipeline-table td, .scores-table td { white-space: nowrap; padding: 6px; }
+    .pipeline-table th, .scores-table th { padding: 6px; font-size: 10px; }
+
+    /* Full-width panel */
+    .panel-full { grid-column: auto; }
+}
+
+@media (max-width: 480px) {
+    .jobs-grid { grid-template-columns: 1fr; }
+    .logo-sub { display: none; }
 }
 </style>
 </head>
