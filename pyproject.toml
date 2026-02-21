@@ -14,6 +14,9 @@ dependencies = [
     "jinja2>=3.1.0",
 ]
 
+[tool.setuptools.package-data]
+wire = ["templates/**/*", "static/**/*"]
+
 [build-system]
 requires = ["setuptools>=75.0"]
 build-backend = "setuptools.build_meta"
