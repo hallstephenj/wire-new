@@ -1,0 +1,14 @@
+pyproject.toml
+wire/__init__.py
+wire/__main__.py
+wire/app.py
+wire/cluster.py
+wire/config.py
+wire/db.py
+wire/ingest.py
+wire/rewrite.py
+wire.egg-info/PKG-INFO
+wire.egg-info/SOURCES.txt
+wire.egg-info/dependency_links.txt
+wire.egg-info/requires.txt
+wire.egg-info/top_level.txt

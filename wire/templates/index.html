@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WIRE</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #0a0a0a;
+    color: #cccccc;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.35;
+    -webkit-font-smoothing: antialiased;
+}
+
+#app {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 16px 20px;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+    border-bottom: 1px solid #222;
+    padding-bottom: 12px;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffb000;
+    letter-spacing: 4px;
+}
+
+.cursor {
+    animation: blink 1s step-end infinite;
+    color: #ffb000;
+}
+
+@keyframes blink {
+    50% { opacity: 0; }
+}
+
+.live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: #4a9e4a;
+    border-radius: 50%;
+    margin-left: 12px;
+    animation: pulse 2s ease-in-out infinite;
+    vertical-align: middle;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(74,158,74,0.7); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(74,158,74,0); }
+}
+
+.controls {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+}
+
+.tabs {
+    display: flex;
+    gap: 2px;
+}
+
+.tab {
+    padding: 4px 12px;
+    cursor: pointer;
+    color: #666;
+    border: 1px solid #333;
+    background: transparent;
+    font-family: inherit;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+}
+
+.tab:hover { color: #ccc; border-color: #555; }
+.tab.active { color: #ffb000; border-color: #ffb000; background: rgba(255,176,0,0.05); }
+
+.separator { color: #333; }
+
+#stories { padding-top: 4px; }
+
+.story {
+    padding: 6px 0;
+    border-bottom: 1px solid #111;
+    animation: fadeIn 0.4s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.story-main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.headline a {
+    color: #ffb000;
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.headline a:hover { text-decoration: underline; }
+
+.meta {
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.source { color: #4a9e4a; }
+.count { color: #4a9e4a; margin-left: 4px; }
+
+.also {
+    font-size: 11px;
+    color: #444;
+    padding-left: 16px;
+    margin-top: 1px;
+}
+
+.also a {
+    color: #555;
+    text-decoration: none;
+}
+
+.also a:hover { color: #888; text-decoration: underline; }
+
+.category-tag {
+    font-size: 9px;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-left: 6px;
+}
+
+.ad-slot {
+    padding: 8px 0;
+    border-bottom: 1px solid #111;
+    color: #222;
+    font-size: 10px;
+    text-align: center;
+}
+
+.status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #0a0a0a;
+    border-top: 1px solid #1a1a1a;
+    padding: 4px 20px;
+    font-size: 10px;
+    color: #444;
+    display: flex;
+    justify-content: space-between;
+}
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: #444;
+}
+</style>
+</head>
+<body>
+<div id="app">
+    <header>
+        <div>
+            <span class="logo">WIRE</span><span class="cursor">▌</span>
+            <span class="live-dot"></span>
+        </div>
+        <div class="controls">
+            <div class="tabs" id="sort-tabs">
+                <button class="tab active" data-sort="hot">HOT</button>
+                <button class="tab" data-sort="new">NEW</button>
+            </div>
+            <span class="separator">│</span>
+            <div class="tabs" id="cat-tabs">
+                <button class="tab active" data-cat="all">ALL</button>
+                <button class="tab" data-cat="markets">MARKETS</button>
+                <button class="tab" data-cat="tech">TECH</button>
+                <button class="tab" data-cat="politics">POLITICS</button>
+                <button class="tab" data-cat="world">WORLD</button>
+            </div>
+        </div>
+    </header>
+    <div id="stories"><div class="loading">Connecting to wire...</div></div>
+</div>
+<div class="status-bar">
+    <span id="status-total">—</span>
+    <span id="status-updated">—</span>
+</div>
+
+<script>
+const AD_INTERVAL = 25;
+let currentSort = 'hot';
+let currentCat = 'all';
+let knownIds = new Set();
+let refreshTimer = null;
+
+document.querySelectorAll('#sort-tabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#sort-tabs .tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSort = btn.dataset.sort;
+        knownIds.clear();
+        fetchStories();
+    });
+});
+
+document.querySelectorAll('#cat-tabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#cat-tabs .tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCat = btn.dataset.cat;
+        knownIds.clear();
+        fetchStories();
+    });
+});
+
+function renderStory(s) {
+    const others = s.other_sources.slice(0, 4).map(o =>
+        `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`
+    ).join(' · ');
+
+    const alsoLine = others ? `<div class="also">also: ${others}</div>` : '';
+    const countDisplay = s.source_count > 1 ? `<span class="count">+${s.source_count}</span>` : '';
+
+    return `<div class="story" data-id="${s.id}">
+        <div class="story-main">
+            <span class="headline"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.headline)}</a></span>
+            <span class="meta"><span class="source">via ${esc(s.source)}</span>${countDisplay}</span>
+        </div>
+        ${alsoLine}
+    </div>`;
+}
+
+function esc(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+async function fetchStories() {
+    try {
+        const url = `/api/stories?sort=${currentSort}&category=${currentCat}&limit=200`;
+        const resp = await fetch(url);
+        const data = await resp.json();
+
+        const container = document.getElementById('stories');
+        let html = '';
+        data.stories.forEach((s, i) => {
+            if (i > 0 && i % AD_INTERVAL === 0) {
+                html += `<div class="ad-slot"><!-- ad --></div>`;
+            }
+            html += renderStory(s);
+        });
+
+        container.innerHTML = html || '<div class="loading">No stories yet. Feeds loading...</div>';
+
+        const newIds = new Set(data.stories.map(s => s.id));
+        knownIds = newIds;
+
+        document.getElementById('status-total').textContent = `${data.total} stories`;
+        document.getElementById('status-updated').textContent = `updated ${new Date(data.updated_at).toLocaleTimeString()}`;
+    } catch (e) {
+        console.error('Fetch error:', e);
+    }
+}
+
+fetchStories();
+refreshTimer = setInterval(fetchStories, 30000);
+</script>
+</body>
+</html>

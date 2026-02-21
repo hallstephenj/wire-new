@@ -1,0 +1,96 @@
+import uuid
+import logging
+from datetime import datetime, timezone, timedelta
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+
+from wire.config import load_config
+
+SOURCE_PRIORITY = {
+    "Reuters": 1, "Reuters Business": 1, "Reuters Politics": 1, "Reuters World": 1,
+    "AP": 2, "AP Politics": 2, "AP Top News": 2,
+    "Bloomberg": 3,
+    "WSJ Markets": 4, "WSJ": 4,
+    "NYT": 5, "New York Times": 5,
+    "WaPo": 6, "Washington Post": 6,
+    "BBC World": 7, "BBC": 7,
+    "CNN": 8, "CNBC": 8,
+}
+
+def get_source_priority(name: str) -> int:
+    return SOURCE_PRIORITY.get(name, 50)
+
+log = logging.getLogger("wire.cluster")
+
+_vectorizer = TfidfVectorizer(stop_words="english", max_features=5000)
+_fitted = False
+_corpus_ids = []
+_corpus_headlines = []
+
+def assign_cluster(conn, headline: str, url: str, source_name: str, category: str) -> str:
+    """Find or create a cluster for this headline. Returns cluster_id."""
+    cfg = load_config()
+    threshold = cfg["clustering"]["similarity_threshold"]
+    lookback = cfg["clustering"]["lookback_hours"]
+    now = datetime.now(timezone.utc)
+    cutoff = (now - timedelta(hours=lookback)).isoformat()
+
+    # Get recent clusters
+    rows = conn.execute(
+        "SELECT id, rewritten_headline, primary_source, source_count FROM story_clusters WHERE last_updated > ? AND expires_at > ?",
+        (cutoff, now.isoformat())
+    ).fetchall()
+
+    if rows:
+        cluster_headlines = [r["rewritten_headline"] or "" for r in rows]
+        all_texts = cluster_headlines + [headline]
+        try:
+            tfidf = TfidfVectorizer(stop_words="english", max_features=5000)
+            matrix = tfidf.fit_transform(all_texts)
+            sims = cosine_similarity(matrix[-1:], matrix[:-1])[0]
+            best_idx = sims.argmax()
+            best_sim = sims[best_idx]
+
+            if best_sim >= threshold:
+                cluster_id = rows[best_idx]["id"]
+                _add_to_cluster(conn, cluster_id, source_name, url, headline, category)
+                return cluster_id
+        except Exception as e:
+            log.warning(f"Clustering error: {e}")
+
+    # New cluster
+    cluster_id = str(uuid.uuid4())
+    expires = (now + timedelta(days=7)).isoformat()
+    conn.execute(
+        "INSERT INTO story_clusters (id, rewritten_headline, primary_url, primary_source, category, source_count, first_seen, last_updated, expires_at) VALUES (?,?,?,?,?,?,?,?,?)",
+        (cluster_id, headline, url, source_name, category, 1, now.isoformat(), now.isoformat(), expires)
+    )
+    conn.execute(
+        "INSERT OR IGNORE INTO cluster_sources (cluster_id, source_name, source_url, added_at) VALUES (?,?,?,?)",
+        (cluster_id, source_name, url, now.isoformat())
+    )
+    return cluster_id
+
+def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline: str, category: str):
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Add source
+    conn.execute(
+        "INSERT OR IGNORE INTO cluster_sources (cluster_id, source_name, source_url, added_at) VALUES (?,?,?,?)",
+        (cluster_id, source_name, url, now)
+    )
+
+    # Update count
+    count = conn.execute("SELECT COUNT(*) as c FROM cluster_sources WHERE cluster_id=?", (cluster_id,)).fetchone()["c"]
+
+    # Check if this source has higher priority
+    current = conn.execute("SELECT primary_source FROM story_clusters WHERE id=?", (cluster_id,)).fetchone()
+    updates = {"source_count": count, "last_updated": now}
+
+    if get_source_priority(source_name) < get_source_priority(current["primary_source"]):
+        updates["primary_url"] = url
+        updates["primary_source"] = source_name
+
+    set_clause = ", ".join(f"{k}=?" for k in updates)
+    conn.execute(f"UPDATE story_clusters SET {set_clause} WHERE id=?", (*updates.values(), cluster_id))
