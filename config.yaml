@@ -11,7 +11,7 @@ polling:
   cleanup_interval_hours: 6
 
 clustering:
-  similarity_threshold: 0.55
+  similarity_threshold: 0.35
   lookback_hours: 48
 
 ai:
