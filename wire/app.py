@@ -72,7 +72,8 @@ async def get_stories(
 
     rows = conn.execute(f"""
         SELECT sc.id, sc.rewritten_headline, sc.primary_url, sc.primary_source,
-               sc.category, sc.source_count, sc.first_seen, sc.last_updated, sc.published_at
+               sc.category, sc.source_count, sc.first_seen, sc.last_updated, sc.published_at,
+               (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
         FROM story_clusters sc
         WHERE {where_clause}
         ORDER BY {order}
@@ -88,6 +89,7 @@ async def get_stories(
         stories.append({
             "id": r["id"],
             "headline": r["rewritten_headline"],
+            "original_headline": r["original_headline"],
             "url": r["primary_url"],
             "source": r["primary_source"],
             "category": r["category"],

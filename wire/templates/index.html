@@ -355,9 +355,12 @@ function renderStory(s) {
     const timeAgo = formatTime(s.published_at || s.first_seen);
     const fullDate = formatFullDate(s.published_at || s.first_seen);
 
+    // Use original headline for NEW sort, rewritten for HOT
+    const displayHeadline = (currentSort === 'new' && s.original_headline) ? s.original_headline : s.headline;
+
     return `<div class="story" data-id="${s.id}">
         <div class="story-main">
-            <span class="headline"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.headline)}</a></span>
+            <span class="headline"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(displayHeadline)}</a></span>
             <span class="meta"><span class="source">via ${esc(s.source)}</span>${countDisplay}<span class="timestamp" title="${esc(fullDate)}">${esc(timeAgo)}</span></span>
         </div>
         ${alsoLine}
