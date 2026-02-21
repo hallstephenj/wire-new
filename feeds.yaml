@@ -129,6 +129,16 @@ feeds:
       url: "https://bitcoinmagazine.com/.rss/full/"
     - name: "The Block"
       url: "https://www.theblock.co/rss.xml"
+    - name: "MarketWatch"
+      url: "https://www.marketwatch.com/rss/topstories"
+    - name: "Yahoo Finance"
+      url: "https://finance.yahoo.com/news/rssindex"
+    - name: "Bloomberg Markets"
+      url: "https://news.google.com/rss/search?q=site:bloomberg.com+markets&hl=en-US&gl=US&ceid=US:en"
+    - name: "CNBC Markets"
+      url: "https://www.cnbc.com/id/20910258/device/rss/rss.html"
+    - name: "Financial Times"
+      url: "https://news.google.com/rss/search?q=site:ft.com+markets&hl=en-US&gl=US&ceid=US:en"
 
   politics:
     # #18 Politico (1.07%)
@@ -146,6 +156,39 @@ feeds:
     # #48 Nextgov/FCW (0.20%)
     - name: "Nextgov"
       url: "https://www.nextgov.com/rss/all/"
+    - name: "The Hill Politics"
+      url: "https://thehill.com/news/feed/"
+    - name: "Politico Congress"
+      url: "https://www.politico.com/rss/congress.xml"
+    - name: "Reuters Politics"
+      url: "https://news.google.com/rss/search?q=site:reuters.com+politics&hl=en-US&gl=US&ceid=US:en"
+    - name: "NBC Politics"
+      url: "https://feeds.nbcnews.com/nbcnews/public/politics"
+
+  general:
+    # Major breaking news feeds (broad coverage, all categories)
+    - name: "Associated Press"
+      url: "https://rsshub.app/apnews/topics/apf-topnews"
+    - name: "Reuters Top News"
+      url: "https://news.google.com/rss/search?q=site:reuters.com&hl=en-US&gl=US&ceid=US:en"
+    - name: "CNN"
+      url: "https://rss.cnn.com/rss/edition.rss"
+    - name: "NPR"
+      url: "https://feeds.npr.org/1001/rss.xml"
+    - name: "ABC News"
+      url: "https://abcnews.go.com/abcnews/topstories"
+    - name: "CBS News"
+      url: "https://www.cbsnews.com/latest/rss/main"
+    - name: "USA Today"
+      url: "https://rssfeeds.usatoday.com/usatoday-NewsTopStories"
+    - name: "Yahoo News"
+      url: "https://news.yahoo.com/rss"
+    - name: "New York Times Top"
+      url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
+    - name: "Washington Post Top"
+      url: "https://feeds.washingtonpost.com/rss/national"
+    - name: "PBS NewsHour"
+      url: "https://www.pbs.org/newshour/feeds/rss/headlines"
 
   world:
     # #47 South China Morning Post (0.21%)
@@ -158,3 +201,9 @@ feeds:
       url: "https://feeds.bbci.co.uk/news/world/rss.xml"
     - name: "Al Jazeera"
       url: "https://www.aljazeera.com/xml/rss/all.xml"
+    - name: "Reuters World"
+      url: "https://news.google.com/rss/search?q=site:reuters.com+world&hl=en-US&gl=US&ceid=US:en"
+    - name: "France24"
+      url: "https://www.france24.com/en/rss"
+    - name: "DW News"
+      url: "https://rss.dw.com/rdf/rss-en-all"

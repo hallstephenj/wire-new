@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from wire.config import load_config
 
@@ -59,6 +60,53 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_clusters_last_updated ON story_clusters(last_updated DESC);
     CREATE INDEX IF NOT EXISTS idx_raw_source_url ON raw_items(source_url);
     CREATE INDEX IF NOT EXISTS idx_raw_headline_source ON raw_items(original_headline, source_name);
+
+    CREATE TABLE IF NOT EXISTS curation_overrides (
+        cluster_id TEXT PRIMARY KEY REFERENCES story_clusters(id),
+        headline_override TEXT,
+        category_override TEXT,
+        pinned INTEGER DEFAULT 0,
+        hidden INTEGER DEFAULT 0,
+        pin_rank INTEGER DEFAULT 0,
+        locked INTEGER DEFAULT 0,
+        updated_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_curation_pinned ON curation_overrides(pinned);
+    CREATE INDEX IF NOT EXISTS idx_curation_hidden ON curation_overrides(hidden);
+
+    CREATE TABLE IF NOT EXISTS curation_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        action TEXT NOT NULL,
+        cluster_id TEXT,
+        detail TEXT,
+        created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_curation_log_created ON curation_log(created_at DESC);
+
+    CREATE TABLE IF NOT EXISTS content_filters (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        filter_type TEXT DEFAULT 'not_news',
+        pattern TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        created_at TEXT,
+        updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS filtered_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        headline TEXT,
+        source_name TEXT,
+        source_url TEXT,
+        feed_url TEXT,
+        category TEXT,
+        filter_id INTEGER,
+        filter_name TEXT,
+        filter_pattern TEXT,
+        filtered_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_filtered_items_at ON filtered_items(filtered_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_filtered_items_filter ON filtered_items(filter_id);
     """)
     # Migration: add published_at to story_clusters if missing
     cols = [r[1] for r in conn.execute("PRAGMA table_info(story_clusters)").fetchall()]
@@ -70,5 +118,51 @@ def init_db():
                 SELECT MIN(ri.published_at) FROM raw_items ri WHERE ri.cluster_id = story_clusters.id
             ) WHERE published_at IS NULL
         """)
+
+    # Migration: add breaking, boost, note, expiry_override to curation_overrides
+    co_cols = [r[1] for r in conn.execute("PRAGMA table_info(curation_overrides)").fetchall()]
+    if "breaking" not in co_cols:
+        conn.execute("ALTER TABLE curation_overrides ADD COLUMN breaking INTEGER DEFAULT 0")
+    if "boost" not in co_cols:
+        conn.execute("ALTER TABLE curation_overrides ADD COLUMN boost INTEGER DEFAULT 0")
+    if "note" not in co_cols:
+        conn.execute("ALTER TABLE curation_overrides ADD COLUMN note TEXT")
+    if "expiry_override" not in co_cols:
+        conn.execute("ALTER TABLE curation_overrides ADD COLUMN expiry_override TEXT")
+
+    # Seed content_filters if empty
+    filter_count = conn.execute("SELECT COUNT(*) as c FROM content_filters").fetchone()["c"]
+    if filter_count == 0:
+        now = datetime.now(timezone.utc).isoformat()
+        seed_filters = [
+            ("Product reviews", r'\b(review|reviewed|hands[- ]on)\b.*\b(of|with|for)\b'),
+            ("Best-of lists", r'\bbest\b.{0,30}\b(for|in|of|under|deals?|picks?|buy)\b'),
+            ("Top N picks", r'\b(top|our)\s+\d+\s+(picks?|favorites?|choices?|recommendations?)\b'),
+            ("Buying guides", r'\bbuying guide\b'),
+            ("Versus comparisons", r'\bvs\.?\s'),
+            ("Sales and deals", r'\b(save|savings?|deal|deals|discount|sale|coupon|promo|offer)\b.{0,30}\b(on|at|for|now|today|this)\b'),
+            ("Percentage off", r'\b\d+%?\s*off\b'),
+            ("Lowest/best price", r'\b(lowest|best)\s+price\b'),
+            ("Under $X", r'\bunder\s+\$\d+\b'),
+            ("Just $X", r'\bjust\s+\$\d+\b'),
+            ("For $X", r'\bfor\s+\$\d+\b'),
+            ("Starts at $X", r'\bstarts?\s+at\s+\$\d+\b'),
+            ("Shopping events", r'\b(black friday|cyber monday|prime day|clearance)\b'),
+            ("Affiliate content", r'\baffiliate\b'),
+            ("Sponsored content", r'\bsponsored\b'),
+            ("Worth it / should you buy", r'\b(worth|still worth)\b.{0,20}\b(it|buying|paying|the price)\b'),
+            ("Should you buy", r'\bshould you (buy|get|upgrade)\b'),
+            ("Listicles / roundups", r'^\d+\s+(best|top|favorite|essential|must[- ]have|ways?|things?|tips?|tricks?|reasons?)\b'),
+            ("Personal blog style", r'\b(here are|my favorite|i love|i tested|we tested|we picked)\b'),
+            ("Marketing content", r'\b(case study|whitepaper|white paper|webinar|free download)\b'),
+            ("Customization content", r'\b(watch faces?|wallpapers?|ringtones?|themes?|skins?)\b.{0,20}\b(for|on|free)\b'),
+            ("How-to / tutorials", r'^(how to|a guide to|the complete guide|step[- ]by[- ]step|building a)\b'),
+        ]
+        for name, pattern in seed_filters:
+            conn.execute(
+                "INSERT INTO content_filters (name, filter_type, pattern, enabled, created_at, updated_at) VALUES (?, 'not_news', ?, 1, ?, ?)",
+                (name, pattern, now, now)
+            )
+
     conn.commit()
     conn.close()

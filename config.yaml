@@ -11,8 +11,8 @@ polling:
   cleanup_interval_hours: 6
 
 clustering:
-  similarity_threshold: 0.35
-  lookback_hours: 48
+  similarity_threshold: 0.30
+  lookback_hours: 72
 
 ai:
   model: "claude-haiku-4-5-20251001"
@@ -35,3 +35,13 @@ search:
     - "technology news today"
     - "political news today"
     - "world news today"
+    - "top stories this week"
+    - "AI news today"
+    - "Trump news today"
+    - "economy news today"
+    - "Ukraine war latest"
+    - "cybersecurity news"
+    - "earnings report today"
+    - "Supreme Court news"
+    - "climate news today"
+    - "crypto bitcoin news today"

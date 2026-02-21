@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WIRE / RIVER</title>
+<title>WIRE / CONTROL PANEL</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
 
@@ -21,6 +21,7 @@ body {
 a { color: #ffb000; text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+/* ── Top Bar ─────────────────────────────────────────────────────── */
 .top-bar {
     display: flex;
     align-items: center;
@@ -33,20 +34,98 @@ a:hover { text-decoration: underline; }
 .logo-sub { color: #555; font-size: 12px; letter-spacing: 2px; margin-left: 8px; }
 .back { color: #555; font-size: 11px; }
 
-.grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) auto;
+.action-btn {
+    padding: 4px 10px;
+    cursor: pointer;
+    color: #ffb000;
+    border: 1px solid #ffb000;
+    background: transparent;
+    font-family: inherit;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+.action-btn:hover { background: #1a1400; }
+.action-btn:disabled { color: #555; border-color: #333; cursor: default; background: transparent; }
+.action-btn.danger { color: #e04040; border-color: #e04040; }
+.action-btn.danger:hover { background: #1a0000; }
+
+/* ── Primary Tab Bar ─────────────────────────────────────────────── */
+.primary-tabs {
+    display: flex;
+    align-items: center;
     gap: 0;
-    min-height: calc(100vh - 45px);
+    border-bottom: 1px solid #222;
+    background: #0d0d0d;
 }
 
+.primary-tab {
+    padding: 8px 20px;
+    cursor: pointer;
+    color: #555;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.primary-tab:hover { color: #999; }
+.primary-tab.active { color: #ffb000; border-bottom-color: #ffb000; }
+
+.primary-tab .tab-badge {
+    font-size: 9px;
+    color: #555;
+    margin-left: 6px;
+    font-weight: 400;
+}
+
+.primary-tab.active .tab-badge { color: #886000; }
+
+/* ── Tab Content ─────────────────────────────────────────────────── */
+.tab-content {
+    display: none;
+    height: calc(100vh - 90px);
+    overflow: hidden;
+}
+
+.tab-content.active { display: flex; }
+
+/* ── Shared ──────────────────────────────────────────────────────── */
+.tabs {
+    display: flex;
+    gap: 2px;
+}
+
+.tab {
+    padding: 4px 10px;
+    cursor: pointer;
+    color: #555;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.tab:hover { color: #999; border-color: #444; }
+.tab.active { color: #ffb000; border-color: #ffb000; background: rgba(255,176,0,0.05); }
+
+.separator { color: #333; margin: 0 4px; }
+
 .panel {
-    border: 1px solid #1a1a1a;
+    border-bottom: 1px solid #1a1a1a;
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
+
+.panel-grow { flex: 1; }
 
 .panel-header {
     padding: 8px 12px;
@@ -69,17 +148,590 @@ a:hover { text-decoration: underline; }
     flex: 1;
 }
 
-/* ── Panel 1: Processes ─────────────────────────────────────────────── */
-.jobs-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+.pagination {
+    display: flex;
+    justify-content: center;
     gap: 8px;
+    padding: 8px;
+    border-top: 1px solid #1a1a1a;
+    flex-shrink: 0;
 }
 
+.pagination button {
+    padding: 3px 10px;
+    cursor: pointer;
+    color: #888;
+    border: 1px solid #333;
+    background: transparent;
+    font-family: inherit;
+    font-size: 10px;
+}
+
+.pagination button:hover { color: #ccc; border-color: #555; }
+.pagination button:disabled { color: #333; cursor: default; }
+.pagination span { color: #555; font-size: 10px; line-height: 24px; }
+
+/* ══════════════════════════════════════════════════════════════════
+   TAB 1: STORIES
+   ══════════════════════════════════════════════════════════════════ */
+.stories-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.stories-main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid #1a1a1a;
+}
+
+.stories-sidebar {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.stories-toolbar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 12px;
+    background: #0f0f0f;
+    border-bottom: 1px solid #1a1a1a;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.show-hidden-label {
+    color: #666;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    cursor: pointer;
+    margin-left: auto;
+}
+
+.show-hidden-label input[type="checkbox"] { accent-color: #ffb000; }
+
+/* ── Electric ball ───────────────────────────────────────────────── */
+.wire-ball {
+    --energy: 0;
+    --size: calc(6px + var(--energy) * 10px);
+    --glow: calc(var(--energy) * 25px);
+    --glow2: calc(var(--energy) * 50px);
+    --glow3: calc(var(--energy) * 80px);
+    --bright: calc(0.08 + var(--energy) * 0.92);
+    width: var(--size);
+    height: var(--size);
+    min-width: 6px;
+    min-height: 6px;
+    border-radius: 50%;
+    margin-top: 3px;
+    flex-shrink: 0;
+    background: radial-gradient(circle at 30% 30%,
+        hsla(40, 100%, 95%, var(--bright)),
+        hsla(30, 100%, 65%, var(--bright)),
+        hsla(22, 100%, 50%, calc(var(--bright) * 0.7)),
+        hsla(15, 100%, 30%, calc(var(--bright) * 0.3))
+    );
+    box-shadow:
+        0 0 calc(var(--energy) * 3px) hsla(30, 100%, 80%, var(--bright)),
+        0 0 var(--glow) hsla(25, 100%, 55%, calc(var(--bright) * 0.9)),
+        0 0 var(--glow2) hsla(20, 100%, 45%, calc(var(--bright) * 0.5)),
+        0 0 var(--glow3) hsla(15, 100%, 35%, calc(var(--bright) * 0.2));
+    animation:
+        wirePulse calc(2.5s - var(--energy) * 1s) ease-in-out infinite,
+        wireCreepScale calc(4s - var(--energy) * 2s) ease-in-out infinite alternate;
+    position: relative;
+}
+
+.wire-ball::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: 0 0 calc(var(--energy) * 12px) hsla(25, 100%, 65%, calc(var(--energy) * 0.5));
+    animation: wireGlow calc(3s - var(--energy) * 1.5s) ease-in-out infinite alternate;
+}
+
+@keyframes wirePulse {
+    0% { opacity: 0.85; filter: brightness(1); }
+    50% { opacity: 1; filter: brightness(1.1); }
+    100% { opacity: 0.85; filter: brightness(1); }
+}
+
+@keyframes wireCreepScale {
+    0% { transform: scale(1); }
+    100% { transform: scale(calc(1 + var(--energy) * 0.2)); }
+}
+
+@keyframes wireGlow {
+    0% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+/* ── Story List ──────────────────────────────────────────────────── */
+.story-list {
+    list-style: none;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.story-row {
+    padding: 8px 12px;
+    border-bottom: 1px solid #111;
+    cursor: default;
+    border-left: 3px solid transparent;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+.story-row-body { flex: 1; min-width: 0; }
+
+.story-row:hover { background: #0d0d0d; }
+.story-row.pinned { border-left-color: #ffb000; }
+.story-row.hidden { opacity: 0.4; }
+.story-row.hidden .story-headline { text-decoration: line-through; }
+.story-row.breaking { border-left-color: #e04040; background: rgba(224,64,64,0.03); }
+.story-row.breaking .story-headline { color: #ff6060; }
+.story-row.locked .story-headline::after { content: ' 🔒'; font-size: 10px; }
+.story-row.boosted { border-left-color: #4a9e4a; }
+.story-row.demoted { opacity: 0.5; }
+
+@keyframes breakingFlash {
+    0%, 100% { border-left-color: #e04040; }
+    50% { border-left-color: #ff4040; }
+}
+
+.story-row.breaking { animation: breakingFlash 2s ease-in-out infinite; }
+
+.story-main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.story-headline {
+    color: #ffb000;
+    font-size: 12px;
+    cursor: text;
+    line-height: 1.4;
+    text-decoration: none;
+}
+
+.story-headline:hover { text-decoration: underline; }
+
+.story-meta {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    font-size: 11px;
+    white-space: nowrap;
+}
+
+.story-source { color: #4a9e4a; }
+.story-count { color: #4a9e4a; }
+
+.story-also {
+    font-size: 11px;
+    color: #444;
+    padding-left: 0;
+    margin-top: 1px;
+}
+
+.story-also a { color: #555; text-decoration: none; }
+.story-also a:hover { color: #888; text-decoration: underline; }
+
+.story-category {
+    font-size: 9px;
+    color: #888;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    padding: 1px 5px;
+    border: 1px solid #222;
+}
+
+.story-category:hover { border-color: #555; color: #ccc; }
+
+.story-time {
+    font-size: 10px;
+    color: #3a3a3a;
+}
+
+/* ── Curation Icon Bar ───────────────────────────────────────────── */
+.curation-bar {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    margin-top: 4px;
+    flex-wrap: wrap;
+}
+
+.cur-btn {
+    padding: 2px 6px;
+    cursor: pointer;
+    color: #555;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    white-space: nowrap;
+}
+
+.cur-btn:hover { color: #ccc; border-color: #555; }
+.cur-btn.active { color: #ffb000; border-color: #ffb000; }
+.cur-btn.breaking-active { color: #e04040; border-color: #e04040; }
+.cur-btn.kill-btn:hover { color: #e04040; border-color: #e04040; }
+.cur-btn.boost-active { color: #4a9e4a; border-color: #4a9e4a; }
+.cur-btn.demote-active { color: #e04040; border-color: #e04040; }
+.cur-btn.note-active { color: #c06ece; border-color: #c06ece; }
+
+/* ── Expanded Story View ─────────────────────────────────────────── */
+.story-expanded {
+    display: none;
+    margin-top: 8px;
+    padding: 8px;
+    background: #0d0d0d;
+    border: 1px solid #1a1a1a;
+}
+
+.story-expanded.open { display: block; }
+
+.note-display {
+    padding: 4px 8px;
+    margin-bottom: 6px;
+    background: rgba(192,110,206,0.08);
+    border-left: 2px solid #c06ece;
+    color: #c06ece;
+    font-size: 10px;
+    word-break: break-word;
+}
+
+.item-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    padding: 4px 0;
+    border-bottom: 1px solid #111;
+    font-size: 10px;
+}
+
+.item-row label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    color: #888;
+    cursor: pointer;
+}
+
+.item-row input[type="checkbox"] { accent-color: #ffb000; }
+.item-source { color: #555; font-size: 9px; min-width: 80px; }
+
+.swap-btn {
+    padding: 1px 5px;
+    cursor: pointer;
+    color: #555;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.swap-btn:hover { color: #ffb000; border-color: #ffb000; }
+
+.merge-bar, .split-bar {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #1a1a1a;
+}
+
+.merge-bar input {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 10px;
+    padding: 3px 6px;
+    flex: 1;
+}
+
+/* ── Curation Log (stories sidebar) ──────────────────────────────── */
+.log-entry {
+    padding: 6px 0;
+    border-bottom: 1px solid #111;
+    font-size: 10px;
+}
+
+.log-action {
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-size: 9px;
+}
+
+.log-action.edit_headline, .log-action.edit_category { color: #ce8e4a; }
+.log-action.pin, .log-action.unpin { color: #ffb000; }
+.log-action.hide, .log-action.unhide { color: #666; }
+.log-action.merge, .log-action.split { color: #5a9ece; }
+.log-action.config_change { color: #c06ece; }
+.log-action.lock, .log-action.unlock { color: #e04040; }
+.log-action.breaking_on, .log-action.breaking_off { color: #ff4040; }
+.log-action.kill, .log-action.not_news { color: #e04040; }
+.log-action.boost { color: #4a9e4a; }
+.log-action.demote, .log-action.unboost { color: #ce8e4a; }
+.log-action.note { color: #c06ece; }
+.log-action.set_expiry { color: #5a9ece; }
+.log-action.swap_primary { color: #ffb000; }
+.log-action.flag_miscategorized, .log-action.flag_bad_headline,
+.log-action.flag_bad_merge, .log-action.flag_duplicate,
+.log-action.flag_stale { color: #e08040; }
+
+.log-time { color: #444; font-size: 9px; }
+.log-detail { color: #666; font-size: 10px; word-break: break-word; }
+.log-cluster { color: #555; font-size: 9px; }
+
+/* ── Inline edit ─────────────────────────────────────────────────── */
+.inline-edit {
+    background: #111;
+    border: 1px solid #ffb000;
+    color: #fff;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 4px 6px;
+    width: 100%;
+}
+
+/* ── Category dropdown ───────────────────────────────────────────── */
+.cat-dropdown {
+    position: absolute;
+    background: #111;
+    border: 1px solid #333;
+    z-index: 100;
+    list-style: none;
+}
+
+.cat-dropdown li {
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.cat-dropdown li:hover { background: #1a1400; color: #ffb000; }
+
+/* ── Flag dropdown ───────────────────────────────────────────────── */
+.flag-dropdown {
+    position: fixed;
+    background: #111;
+    border: 1px solid #333;
+    z-index: 100;
+    list-style: none;
+}
+
+.flag-dropdown li {
+    padding: 4px 12px;
+    cursor: pointer;
+    font-size: 10px;
+    color: #e08040;
+    letter-spacing: 1px;
+}
+
+.flag-dropdown li:hover { background: #1a0a00; color: #ffb000; }
+
+/* ── Note input ──────────────────────────────────────────────────── */
+.note-input-bar {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid #1a1a1a;
+}
+
+.note-input-bar input {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 10px;
+    padding: 3px 6px;
+    flex: 1;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   TAB 2: FILTERS
+   ══════════════════════════════════════════════════════════════════ */
+.filters-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    overflow: hidden;
+}
+
+.filters-patterns-pane, .filters-log-pane {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.filters-patterns-pane {
+    border-right: 1px solid #1a1a1a;
+}
+
+.filter-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 0;
+    border-bottom: 1px solid #111;
+    font-size: 10px;
+}
+
+.filter-row.disabled { opacity: 0.4; }
+
+.filter-name { flex: 1; color: #ccc; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.filter-type-badge {
+    font-size: 8px;
+    padding: 1px 4px;
+    letter-spacing: 1px;
+    font-weight: 700;
+    color: #ce8e4a;
+    border: 1px solid #6e4a2a;
+    white-space: nowrap;
+}
+
+.filter-toggle {
+    padding: 2px 6px;
+    cursor: pointer;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.filter-toggle.on { color: #4a9e4a; border-color: #2a5a2a; }
+.filter-toggle.off { color: #e04040; border-color: #6e2a2a; }
+
+.filter-del {
+    padding: 2px 5px;
+    cursor: pointer;
+    color: #555;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 8px;
+}
+
+.filter-del:hover { color: #e04040; border-color: #e04040; }
+
+.filter-add-form {
+    padding: 8px 0;
+    border-top: 1px solid #1a1a1a;
+    margin-top: 6px;
+}
+
+.filter-add-form input, .filter-add-form select {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 10px;
+    padding: 3px 6px;
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.filter-add-form select { width: 100%; }
+
+.filter-add-buttons {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.filter-test-results {
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 9px;
+    color: #888;
+    margin-top: 4px;
+    border: 1px solid #1a1a1a;
+    padding: 4px;
+}
+
+.filter-test-results div {
+    padding: 2px 0;
+    border-bottom: 1px solid #111;
+}
+
+.filtered-item-row {
+    padding: 5px 0;
+    border-bottom: 1px solid #111;
+    font-size: 10px;
+}
+
+.filtered-item-headline { color: #888; word-break: break-word; }
+.filtered-item-meta { color: #555; font-size: 9px; margin-top: 2px; }
+.filtered-item-filter { color: #ce8e4a; font-size: 9px; }
+
+.filter-search-input {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 10px;
+    padding: 3px 6px;
+    width: 100%;
+    margin-bottom: 6px;
+}
+
+.filter-search-input:focus { border-color: #ffb000; outline: none; }
+
+/* ══════════════════════════════════════════════════════════════════
+   TAB 3: SYSTEM
+   ══════════════════════════════════════════════════════════════════ */
+.system-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    width: 100%;
+    overflow: hidden;
+}
+
+.system-col {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid #1a1a1a;
+}
+
+.system-col:last-child { border-right: none; }
+
+/* ── Processes ───────────────────────────────────────────────────── */
 .job-card {
     border: 1px solid #1a1a1a;
-    padding: 10px;
+    padding: 8px;
     background: #0d0d0d;
+    margin-bottom: 6px;
 }
 
 .job-name {
@@ -87,7 +739,7 @@ a:hover { text-decoration: underline; }
     font-weight: 700;
     color: #ffb000;
     letter-spacing: 1px;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
 }
 
 .job-field {
@@ -99,13 +751,26 @@ a:hover { text-decoration: underline; }
 .job-field span { color: #999; }
 
 .job-countdown {
-    font-size: 16px;
+    font-size: 14px;
     font-weight: 700;
     color: #4a9e4a;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
-/* ── Panel 2: Event Stream ──────────────────────────────────────────── */
+/* ── Stats ───────────────────────────────────────────────────────── */
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 3px 0;
+    font-size: 11px;
+}
+
+.stat-label { color: #666; }
+.stat-value { color: #cccccc; font-weight: 700; }
+.stat-value.amber { color: #ffb000; }
+.stat-value.green { color: #4a9e4a; }
+
+/* ── Events ──────────────────────────────────────────────────────── */
 .filter-bar {
     display: flex;
     gap: 2px;
@@ -113,7 +778,7 @@ a:hover { text-decoration: underline; }
 }
 
 .filter-btn {
-    padding: 2px 8px;
+    padding: 2px 6px;
     cursor: pointer;
     color: #555;
     border: 1px solid #222;
@@ -127,257 +792,78 @@ a:hover { text-decoration: underline; }
 .filter-btn:hover { color: #999; border-color: #444; }
 .filter-btn.active { color: #ffb000; border-color: #ffb000; }
 
-.pause-btn {
-    padding: 2px 8px;
-    cursor: pointer;
-    color: #555;
-    border: 1px solid #222;
-    background: transparent;
-    font-family: inherit;
-    font-size: 9px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-left: auto;
-}
-
-.pause-btn:hover { color: #999; border-color: #444; }
-.pause-btn.active { color: #e04040; border-color: #e04040; }
-
 .event-list { list-style: none; }
 
 .event-item {
     padding: 3px 0;
     border-bottom: 1px solid #111;
-    font-size: 11px;
-    display: flex;
-    gap: 8px;
-    align-items: baseline;
+    font-size: 10px;
 }
 
-.ev-time { color: #444; white-space: nowrap; flex-shrink: 0; }
+.ev-time { color: #444; font-size: 9px; }
 .ev-tag {
-    font-size: 9px;
-    padding: 1px 5px;
+    font-size: 8px;
+    padding: 1px 4px;
     letter-spacing: 1px;
     font-weight: 700;
-    flex-shrink: 0;
-    min-width: 60px;
-    text-align: center;
 }
 
 .ev-tag.ingest   { color: #4a9e4a; border: 1px solid #2a5a2a; }
 .ev-tag.cluster  { color: #5a9ece; border: 1px solid #2a4a6e; }
 .ev-tag.rewrite  { color: #ce8e4a; border: 1px solid #6e4a2a; }
 .ev-tag.error    { color: #e04040; border: 1px solid #6e2a2a; }
+.ev-tag.curation { color: #c06ece; border: 1px solid #6e2a6e; }
 
-.ev-msg { color: #888; word-break: break-word; }
+.ev-msg { color: #888; word-break: break-word; font-size: 10px; }
 
-/* ── Panel 3: Stats + Config ────────────────────────────────────────── */
-.stats-section {
-    margin-bottom: 14px;
-}
-
-.stats-title {
-    font-size: 9px;
-    color: #555;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-bottom: 6px;
-    border-bottom: 1px solid #1a1a1a;
-    padding-bottom: 4px;
-}
-
-.stat-row {
+/* ── Live Config ─────────────────────────────────────────────────── */
+.config-row {
     display: flex;
-    justify-content: space-between;
-    padding: 3px 0;
-    font-size: 11px;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
 }
 
-.stat-label { color: #666; }
-.stat-value { color: #cccccc; font-weight: 700; }
-.stat-value.amber { color: #ffb000; }
-.stat-value.green { color: #4a9e4a; }
-
-/* ── Panel 4: Pipeline ──────────────────────────────────────────────── */
-.pipeline-table {
-    width: 100%;
-    border-collapse: collapse;
+.config-label {
     font-size: 10px;
-}
-
-.pipeline-table th {
-    text-align: left;
-    color: #555;
-    font-size: 9px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    padding: 4px 6px;
-    border-bottom: 1px solid #222;
-    position: sticky;
-    top: 0;
-    background: #0a0a0a;
-}
-
-.pipeline-table td {
-    padding: 4px 6px;
-    border-bottom: 1px solid #111;
-    color: #888;
-    max-width: 250px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.status-badge {
-    font-size: 9px;
-    padding: 1px 5px;
-    letter-spacing: 1px;
-    font-weight: 700;
-}
-
-.status-badge.rewritten { color: #4a9e4a; border: 1px solid #2a5a2a; }
-.status-badge.pending { color: #ffb000; border: 1px solid #554400; }
-
-.cat-badge {
-    font-size: 9px;
     color: #666;
-    letter-spacing: 1px;
+    min-width: 100px;
 }
 
-/* ── Panel 5: Source Scores ────────────────────────────────────────── */
-.panel-full {
-    grid-column: 1 / -1;
+.config-input {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 11px;
+    padding: 3px 6px;
+    width: 100px;
 }
 
-.scores-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 10px;
-}
+.config-input:focus { border-color: #ffb000; outline: none; }
 
-.scores-table th {
-    text-align: left;
-    color: #555;
-    font-size: 9px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    padding: 4px 6px;
-    border-bottom: 1px solid #222;
-    position: sticky;
-    top: 0;
-    background: #0a0a0a;
+.config-set {
+    padding: 3px 8px;
     cursor: pointer;
+    color: #ffb000;
+    border: 1px solid #ffb000;
+    background: transparent;
+    font-family: inherit;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
 }
 
-.scores-table th:hover { color: #999; }
+.config-set:hover { background: #1a1400; }
 
-.scores-table td {
-    padding: 4px 6px;
-    border-bottom: 1px solid #111;
-    color: #888;
-}
-
-.scores-table td.source-name { color: #ccc; }
-.score-total { color: #ffb000; font-weight: 700; }
-.score-free { color: #4a9e4a; }
-.score-metered { color: #ce8e4a; }
-.score-paywall { color: #e04040; }
-
-@media (max-width: 900px) {
-    body { font-size: 13px; }
-
-    .top-bar { padding: 12px 12px; }
-    .logo { font-size: 18px; }
-
-    .grid {
-        display: flex !important;
-        flex-direction: column;
-        min-height: auto !important;
-        height: auto !important;
-    }
-
-    .panel {
-        min-height: 0 !important;
-        max-height: none !important;
-        height: auto !important;
-        flex: none !important;
-        overflow: visible;
-        border-left: none;
-        border-right: none;
-    }
-
-    .panel-body {
-        padding: 10px;
-        overflow: visible !important;
-        max-height: none !important;
-        height: auto !important;
-    }
-
-    /* Processes */
-    .jobs-grid {
-        grid-template-columns: 1fr 1fr;
-        gap: 6px;
-    }
-
-    .job-card { padding: 8px; }
-    .job-name { font-size: 11px; }
-    .job-field { font-size: 10px; }
-    .job-countdown { font-size: 14px; }
-
-    /* Event stream: cap height so it doesn't go forever */
-    #event-stream-body {
-        max-height: 400px !important;
-        overflow-y: auto !important;
-    }
-
-    .panel-header {
-        flex-wrap: wrap;
-        gap: 6px;
-        padding: 8px 10px;
-    }
-
-    .filter-bar {
-        flex-wrap: wrap;
-        gap: 4px;
-    }
-
-    .filter-btn, .pause-btn {
-        font-size: 10px;
-        padding: 4px 10px;
-        -webkit-tap-highlight-color: transparent;
-    }
-
-    .event-item {
-        flex-wrap: wrap;
-        gap: 4px;
-        padding: 5px 0;
-        font-size: 12px;
-    }
-
-    .ev-tag { font-size: 10px; }
-    .ev-msg { font-size: 12px; }
-
-    /* Stats */
-    .stat-row { font-size: 12px; padding: 4px 0; }
-
-    /* Tables: horizontal scroll, capped height */
-    .pipeline-table, .scores-table {
-        font-size: 11px;
-        display: block;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-    }
-
-    .pipeline-table td, .scores-table td { white-space: nowrap; padding: 6px; }
-    .pipeline-table th, .scores-table th { padding: 6px; font-size: 10px; }
-
-    .panel-full { grid-column: auto; }
-}
-
-@media (max-width: 480px) {
-    .jobs-grid { grid-template-columns: 1fr; }
-    .logo-sub { display: none; }
+/* ── Responsive ──────────────────────────────────────────────────── */
+@media (max-width: 1100px) {
+    .stories-layout { grid-template-columns: 1fr; }
+    .stories-sidebar { max-height: 300px; border-top: 1px solid #1a1a1a; }
+    .filters-layout { grid-template-columns: 1fr; }
+    .filters-log-pane { border-top: 1px solid #1a1a1a; }
+    .system-layout { grid-template-columns: 1fr; }
+    .system-col { border-right: none; border-bottom: 1px solid #1a1a1a; max-height: 400px; }
 }
 </style>
 </head>
@@ -385,173 +871,248 @@ a:hover { text-decoration: underline; }
 
 <div class="top-bar">
     <div>
-        <span class="logo">WIRE</span><span class="logo-sub">RIVER</span>
+        <span class="logo">WIRE</span><span class="logo-sub">CONTROL PANEL</span>
     </div>
-    <a class="back" href="/">BACK TO WIRE</a>
+    <div style="display:flex;gap:8px;align-items:center;">
+        <button class="action-btn danger" id="reboot-btn" onclick="triggerReboot()">REBOOT</button>
+        <button class="action-btn" id="backfill-btn" onclick="triggerBackfill()">BACKFILL 48H</button>
+        <a class="back" href="/">BACK TO WIRE</a>
+    </div>
 </div>
 
-<div class="grid">
-    <!-- Panel 1: Processes -->
-    <div class="panel">
-        <div class="panel-header">PROCESSES</div>
-        <div class="panel-body">
-            <div class="jobs-grid" id="jobs-grid">
-                <div class="job-card" id="job-rss">
-                    <div class="job-name">RSS</div>
-                    <div class="job-field">next: <span id="rss-next">--</span></div>
-                    <div class="job-field">interval: <span id="rss-interval">--</span></div>
-                    <div class="job-countdown" id="rss-countdown">--:--</div>
+<!-- ── PRIMARY TAB BAR ─────────────────────────────────────────────── -->
+<div class="primary-tabs" id="primary-tabs">
+    <button class="primary-tab active" data-tab="stories">STORIES</button>
+    <button class="primary-tab" data-tab="filters">FILTERS <span class="tab-badge" id="tab-badge-filters"></span></button>
+    <button class="primary-tab" data-tab="system">SYSTEM <span class="tab-badge" id="tab-badge-system"></span></button>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     TAB 1: STORIES
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="tab-content active" id="tab-stories">
+    <div class="stories-layout">
+        <div class="stories-main">
+            <div class="stories-toolbar">
+                <div class="tabs" id="sort-tabs">
+                    <button class="tab active" data-sort="hot">HOT</button>
+                    <button class="tab" data-sort="new">NEW</button>
                 </div>
-                <div class="job-card" id="job-search">
-                    <div class="job-name">SEARCH</div>
-                    <div class="job-field">next: <span id="search-next">--</span></div>
-                    <div class="job-field">interval: <span id="search-interval">--</span></div>
-                    <div class="job-countdown" id="search-countdown">--:--</div>
+                <span class="separator">|</span>
+                <div class="tabs" id="cat-tabs">
+                    <button class="tab active" data-cat="all">ALL</button>
+                    <button class="tab" data-cat="markets">MARKETS</button>
+                    <button class="tab" data-cat="tech">TECH</button>
+                    <button class="tab" data-cat="politics">POLITICS</button>
+                    <button class="tab" data-cat="world">WORLD</button>
                 </div>
-                <div class="job-card" id="job-rewrite">
-                    <div class="job-name">REWRITE</div>
-                    <div class="job-field">next: <span id="rewrite-next">--</span></div>
-                    <div class="job-field">interval: <span id="rewrite-interval">--</span></div>
-                    <div class="job-countdown" id="rewrite-countdown">--:--</div>
-                </div>
-                <div class="job-card" id="job-cleanup">
-                    <div class="job-name">CLEANUP</div>
-                    <div class="job-field">next: <span id="cleanup-next">--</span></div>
-                    <div class="job-field">interval: <span id="cleanup-interval">--</span></div>
-                    <div class="job-countdown" id="cleanup-countdown">--:--</div>
-                </div>
-                <div class="job-card" id="job-recluster" style="cursor:pointer;border-color:#ffb000;" onclick="doRecluster()">
-                    <div class="job-name" style="color:#ffb000;">⟳ RECLUSTER</div>
-                    <div class="job-field" id="recluster-status">click to rebuild</div>
-                    <div class="job-countdown" id="recluster-result">--</div>
+                <label class="show-hidden-label"><input type="checkbox" id="show-hidden"> SHOW HIDDEN</label>
+            </div>
+            <ul class="story-list" id="story-list"></ul>
+            <div class="pagination" id="pagination"></div>
+        </div>
+        <div class="stories-sidebar">
+            <div class="panel panel-grow">
+                <div class="panel-header">CURATION LOG</div>
+                <div class="panel-body" id="curation-log-body">
+                    <div id="curation-log-list"></div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Panel 2: Event Stream -->
-    <div class="panel">
-        <div class="panel-header">
-            <span>EVENT STREAM</span>
-            <div style="display:flex;gap:4px;align-items:center;">
-                <div class="filter-bar">
-                    <button class="filter-btn active" data-filter="all">ALL</button>
-                    <button class="filter-btn" data-filter="ingest">INGEST</button>
-                    <button class="filter-btn" data-filter="cluster">CLUSTER</button>
-                    <button class="filter-btn" data-filter="rewrite">REWRITE</button>
-                    <button class="filter-btn" data-filter="error">ERRORS</button>
+<!-- ══════════════════════════════════════════════════════════════════
+     TAB 2: FILTERS
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-filters">
+    <div class="filters-layout">
+        <!-- Left: Patterns -->
+        <div class="filters-patterns-pane">
+            <div class="panel-header">FILTER PATTERNS</div>
+            <div class="panel-body">
+                <div id="filters-list"></div>
+                <div class="filter-add-form">
+                    <input type="text" id="filter-add-name" placeholder="Filter name...">
+                    <input type="text" id="filter-add-pattern" placeholder="Regex pattern...">
+                    <select id="filter-add-type">
+                        <option value="not_news">not_news</option>
+                    </select>
+                    <div class="filter-add-buttons">
+                        <button class="action-btn" onclick="testNewFilter()" style="font-size:9px;padding:3px 8px;">TEST</button>
+                        <button class="action-btn" onclick="addFilter()" style="font-size:9px;padding:3px 8px;">ADD</button>
+                    </div>
+                    <div class="filter-test-results" id="filter-test-results" style="display:none;"></div>
                 </div>
-                <button class="pause-btn" id="pause-btn">PAUSE</button>
             </div>
         </div>
-        <div class="panel-body" id="event-stream-body">
-            <ul class="event-list" id="event-list"></ul>
-        </div>
-    </div>
-
-    <!-- Panel 3: DB Stats + Config -->
-    <div class="panel">
-        <div class="panel-header">DB STATS + CONFIG</div>
-        <div class="panel-body">
-            <div class="stats-section">
-                <div class="stats-title">DATABASE</div>
-                <div class="stat-row"><span class="stat-label">clusters</span><span class="stat-value green" id="stat-clusters">--</span></div>
-                <div class="stat-row"><span class="stat-label">raw items</span><span class="stat-value" id="stat-raw">--</span></div>
-                <div class="stat-row"><span class="stat-label">pending rewrites</span><span class="stat-value amber" id="stat-pending">--</span></div>
+        <!-- Right: Filtered Items Log -->
+        <div class="filters-log-pane">
+            <div class="panel-header">FILTERED ITEMS LOG</div>
+            <div class="panel-body">
+                <input type="text" class="filter-search-input" id="filtered-items-search" placeholder="Search headlines..." oninput="debouncedFetchFilteredItems()">
+                <div id="filtered-items-list"></div>
             </div>
-            <div class="stats-section">
-                <div class="stats-title">CONFIGURATION</div>
-                <div class="stat-row"><span class="stat-label">similarity threshold</span><span class="stat-value" id="cfg-threshold">--</span></div>
-                <div class="stat-row"><span class="stat-label">lookback hours</span><span class="stat-value" id="cfg-lookback">--</span></div>
-                <div class="stat-row"><span class="stat-label">AI model</span><span class="stat-value" id="cfg-model">--</span></div>
-                <div class="stat-row"><span class="stat-label">batch size</span><span class="stat-value" id="cfg-batch">--</span></div>
+            <div class="pagination" id="filtered-items-pagination"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     TAB 3: SYSTEM
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-system">
+    <div class="system-layout">
+        <!-- Col 1: Processes + Stats -->
+        <div class="system-col">
+            <div class="panel">
+                <div class="panel-header">PROCESSES</div>
+                <div class="panel-body">
+                    <div class="job-card" id="job-rss">
+                        <div class="job-name">RSS</div>
+                        <div class="job-field">next: <span id="rss-next">--</span></div>
+                        <div class="job-countdown" id="rss-countdown">--:--</div>
+                    </div>
+                    <div class="job-card" id="job-search">
+                        <div class="job-name">SEARCH</div>
+                        <div class="job-field">next: <span id="search-next">--</span></div>
+                        <div class="job-countdown" id="search-countdown">--:--</div>
+                    </div>
+                    <div class="job-card" id="job-rewrite">
+                        <div class="job-name">REWRITE</div>
+                        <div class="job-field">next: <span id="rewrite-next">--</span></div>
+                        <div class="job-countdown" id="rewrite-countdown">--:--</div>
+                    </div>
+                    <div class="job-card" id="job-cleanup">
+                        <div class="job-name">CLEANUP</div>
+                        <div class="job-field">next: <span id="cleanup-next">--</span></div>
+                        <div class="job-countdown" id="cleanup-countdown">--:--</div>
+                    </div>
+                    <div class="job-card" style="cursor:pointer;border-color:#ffb000;" onclick="doRecluster()">
+                        <div class="job-name" style="color:#ffb000;">RECLUSTER</div>
+                        <div class="job-field" id="recluster-status">click to rebuild</div>
+                    </div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">STATS</div>
+                <div class="panel-body">
+                    <div class="stat-row"><span class="stat-label">clusters</span><span class="stat-value green" id="stat-clusters">--</span></div>
+                    <div class="stat-row"><span class="stat-label">raw items</span><span class="stat-value" id="stat-raw">--</span></div>
+                    <div class="stat-row"><span class="stat-label">pending rewrites</span><span class="stat-value amber" id="stat-pending">--</span></div>
+                    <div class="stat-row"><span class="stat-label">active filters</span><span class="stat-value" id="stat-filters">--</span></div>
+                    <div class="stat-row"><span class="stat-label">filtered (24h)</span><span class="stat-value amber" id="stat-filtered-24h">--</span></div>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Panel 4: Pipeline -->
-    <div class="panel">
-        <div class="panel-header">PIPELINE</div>
-        <div class="panel-body" style="padding:0;">
-            <table class="pipeline-table">
-                <thead>
-                    <tr>
-                        <th>SOURCE</th>
-                        <th>HEADLINE</th>
-                        <th>CAT</th>
-                        <th>CLUSTER</th>
-                        <th>STATUS</th>
-                    </tr>
-                </thead>
-                <tbody id="pipeline-body"></tbody>
-            </table>
+        <!-- Col 2: Events -->
+        <div class="system-col">
+            <div class="panel panel-grow">
+                <div class="panel-header">
+                    <span>EVENTS</span>
+                    <div class="filter-bar">
+                        <button class="filter-btn active" data-filter="all">ALL</button>
+                        <button class="filter-btn" data-filter="ingest">IN</button>
+                        <button class="filter-btn" data-filter="cluster">CL</button>
+                        <button class="filter-btn" data-filter="rewrite">RW</button>
+                        <button class="filter-btn" data-filter="error">ER</button>
+                    </div>
+                </div>
+                <div class="panel-body" id="event-stream-body">
+                    <ul class="event-list" id="event-list"></ul>
+                </div>
+            </div>
         </div>
-    </div>
 
-    <!-- Panel 5: Source Quality Scores -->
-    <div class="panel panel-full">
-        <div class="panel-header">SOURCE QUALITY SCORES</div>
-        <div class="panel-body" style="padding:0; max-height: 400px;">
-            <table class="scores-table">
-                <thead>
-                    <tr>
-                        <th data-sort="source">SOURCE</th>
-                        <th data-sort="total">TOTAL</th>
-                        <th data-sort="reliability">RELIABILITY</th>
-                        <th data-sort="access">ACCESS</th>
-                        <th data-sort="reputation">REPUTATION</th>
-                    </tr>
-                </thead>
-                <tbody id="scores-body"></tbody>
-            </table>
+        <!-- Col 3: Live Config -->
+        <div class="system-col">
+            <div class="panel panel-grow">
+                <div class="panel-header">LIVE CONFIG</div>
+                <div class="panel-body">
+                    <div class="config-row">
+                        <span class="config-label">similarity</span>
+                        <input class="config-input" id="cfg-similarity" type="number" step="0.01" min="0" max="1">
+                        <button class="config-set" onclick="setConfig('clustering.similarity_threshold', document.getElementById('cfg-similarity').value)">SET</button>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-label">lookback hrs</span>
+                        <input class="config-input" id="cfg-lookback" type="number" step="1" min="1">
+                        <button class="config-set" onclick="setConfig('clustering.lookback_hours', document.getElementById('cfg-lookback').value)">SET</button>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-label">AI model</span>
+                        <input class="config-input" id="cfg-model" type="text" style="width:160px;">
+                        <button class="config-set" onclick="setConfig('ai.model', document.getElementById('cfg-model').value)">SET</button>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-label">batch size</span>
+                        <input class="config-input" id="cfg-batch" type="number" step="1" min="1">
+                        <button class="config-set" onclick="setConfig('ai.batch_size', document.getElementById('cfg-batch').value)">SET</button>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-label">RSS interval</span>
+                        <input class="config-input" id="cfg-rss-interval" type="number" step="1" min="1">
+                        <button class="config-set" onclick="setConfig('polling.rss_interval_minutes', document.getElementById('cfg-rss-interval').value)">SET</button>
+                    </div>
+                    <div class="config-row">
+                        <span class="config-label">search interval</span>
+                        <input class="config-input" id="cfg-search-interval" type="number" step="1" min="1">
+                        <button class="config-set" onclick="setConfig('polling.search_interval_minutes', document.getElementById('cfg-search-interval').value)">SET</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
 <script>
-async function doRecluster() {
-    const status = document.getElementById('recluster-status');
-    const result = document.getElementById('recluster-result');
-    status.textContent = 'rebuilding...';
-    result.textContent = '⏳';
-    try {
-        const r = await fetch('/api/recluster', {method:'POST'});
-        const d = await r.json();
-        status.textContent = `${d.items} items → ${d.clusters} clusters`;
-        result.textContent = '✓ done';
-        setTimeout(() => { result.textContent = '--'; }, 5000);
-    } catch(e) {
-        status.textContent = 'error: ' + e.message;
-        result.textContent = '✗';
-    }
-}
-
-let paused = false;
+// ── State ────────────────────────────────────────────────────────────
+let storiesPage = 0;
+const storiesPerPage = 50;
+let currentSort = 'hot';
+let currentCat = 'all';
 let eventFilter = 'all';
 let jobNextRuns = {};
+let expandedStory = null;
 
-// ── Filter buttons ──────────────────────────────────────────────────
-document.querySelectorAll('.filter-btn').forEach(btn => {
+// ── Primary Tab Switching ────────────────────────────────────────────
+let activeTab = 'stories';
+
+document.querySelectorAll('#primary-tabs .primary-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('#primary-tabs .primary-tab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        eventFilter = btn.dataset.filter;
-        fetchEvents();
+        activeTab = btn.dataset.tab;
+        document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+        document.getElementById(`tab-${activeTab}`).classList.add('active');
+
+        // Lazy-load data when switching tabs
+        if (activeTab === 'filters') {
+            fetchFilters();
+            fetchFilteredItems();
+        } else if (activeTab === 'system') {
+            fetchEvents();
+        }
     });
 });
 
-document.getElementById('pause-btn').addEventListener('click', () => {
-    paused = !paused;
-    const btn = document.getElementById('pause-btn');
-    btn.textContent = paused ? 'RESUME' : 'PAUSE';
-    btn.classList.toggle('active', paused);
-});
+// ── Helpers ──────────────────────────────────────────────────────────
+function esc(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
 
-// ── Formatting ──────────────────────────────────────────────────────
+function trunc(s, n) {
+    if (!s) return '';
+    return s.length > n ? s.substring(0, n) + '...' : s;
+}
+
 function fmtTime(iso) {
-    if (!iso) return '--:--:--';
-    const d = new Date(iso);
-    return d.toLocaleTimeString('en-US', { hour12: false });
+    if (!iso) return '--:--';
+    return new Date(iso).toLocaleTimeString('en-US', { hour12: false });
 }
 
 function fmtCountdown(iso) {
@@ -563,11 +1124,15 @@ function fmtCountdown(iso) {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-function esc(s) {
-    if (!s) return '';
-    const d = document.createElement('div');
-    d.textContent = s;
-    return d.innerHTML;
+function timeAgo(iso) {
+    if (!iso) return '';
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
 }
 
 function eventTag(type) {
@@ -580,76 +1145,491 @@ function eventTag(type) {
 
 function eventMsg(ev) {
     switch (ev.type) {
-        case 'ingest_start': return `${ev.job.toUpperCase()} poll started`;
-        case 'ingest_done': return `${ev.job.toUpperCase()} poll done — ${ev.items} items`;
-        case 'cluster_hit': return `merged (${ev.similarity}) "${trunc(ev.headline, 50)}"`;
-        case 'cluster_new': return `new cluster: "${trunc(ev.headline, 50)}" [${ev.category}]`;
-        case 'rewrite': return `"${trunc(ev.before, 30)}" → "${trunc(ev.after, 30)}" [${ev.category}]`;
+        case 'ingest_start': return `${ev.job.toUpperCase()} started`;
+        case 'ingest_done': return `${ev.job.toUpperCase()} done: ${ev.items} items`;
+        case 'cluster_hit': return `merged "${trunc(ev.headline, 40)}"`;
+        case 'cluster_new': return `new: "${trunc(ev.headline, 40)}"`;
+        case 'rewrite': return `"${trunc(ev.after, 50)}"`;
         case 'error': return `[${ev.source}] ${ev.message}`;
         default: return JSON.stringify(ev);
     }
 }
 
-function trunc(s, n) {
-    if (!s) return '';
-    return s.length > n ? s.substring(0, n) + '...' : s;
+// ── Wire energy ──────────────────────────────────────────────────────
+const TIER1_SOURCES = new Set([
+    'reuters', 'ap', 'associated press', 'bloomberg', 'bbc', 'nyt', 'new york times',
+    'the new york times', 'wsj', 'wall street journal', 'the wall street journal',
+    'cnn', 'financial times', 'ft', 'the washington post', 'washington post',
+    'the guardian', 'npr', 'al jazeera', 'axios', 'politico', 'the economist',
+    'techcrunch', 'the verge', 'ars technica', 'wired', 'cnbc', 'abc news',
+    'cbs news', 'nbc news', 'pbs', 'the atlantic', 'time', 'fortune',
+]);
+
+function wireEnergy(s) {
+    try {
+        const allNames = [s.source, ...(s.other_sources || []).map(o => o.name)].filter(Boolean);
+        const uniqueHeadlines = new Set((s.items || []).map(i => i.headline)).size || 1;
+        const coverage = Math.min(uniqueHeadlines, 15) / 15;
+        const t1 = allNames.filter(n => n && TIER1_SOURCES.has(n.toLowerCase())).length;
+        const quality = Math.min(t1, 5) / 5;
+        const ts = s.published_at || s.first_seen;
+        const hoursOld = ts ? Math.max(0, (Date.now() - new Date(ts).getTime()) / 3600000) : 48;
+        const recency = Math.max(0, 1 - hoursOld / 72);
+        const raw = (coverage * 0.55 + quality * 0.45) * (0.15 + recency * 0.85);
+        return Math.min(1, Math.max(0, raw));
+    } catch(e) { return 0; }
 }
 
-// ── Fetch functions ─────────────────────────────────────────────────
+// ── API calls ────────────────────────────────────────────────────────
+async function apiPost(endpoint, body) {
+    const resp = await fetch(`/api/river/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+    });
+    return resp.json();
+}
+
+// ── Fetch Stories ────────────────────────────────────────────────────
+async function fetchStories() {
+    const showHidden = document.getElementById('show-hidden').checked;
+
+    try {
+        const params = new URLSearchParams({
+            category: currentCat,
+            sort: currentSort,
+            show_hidden: showHidden,
+            limit: storiesPerPage,
+            offset: storiesPage * storiesPerPage,
+        });
+        const resp = await fetch(`/api/river/stories?${params}`);
+        const data = await resp.json();
+        renderStories(data.stories, data.total);
+    } catch (e) {
+        console.error('Stories fetch error:', e);
+    }
+}
+
+function renderStories(stories, total) {
+    const list = document.getElementById('story-list');
+    list.innerHTML = stories.map(s => {
+        const classes = ['story-row'];
+        if (s.breaking) classes.push('breaking');
+        else if (s.pinned) classes.push('pinned');
+        if (s.hidden) classes.push('hidden');
+        if (s.locked) classes.push('locked');
+        if (s.boost > 0) classes.push('boosted');
+        if (s.boost < 0) classes.push('demoted');
+
+        // Other sources line (mirroring homepage "also: X · Y · Z")
+        const allOthers = s.other_sources || [];
+        const shownOthers = allOthers.slice(0, 3).map(o =>
+            `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`
+        ).join(' &middot; ');
+        const moreCount = (s.items && s.items.length) || 0;
+        const moreBtn = moreCount > 0 ? ` <button class="cur-btn" onclick="toggleExpand('${esc(s.id)}')" style="font-size:8px;padding:1px 4px;">+${moreCount} more</button>` : '';
+        const alsoLine = shownOthers ? `<div class="story-also">also: ${shownOthers}${moreBtn}</div>` : '';
+
+        const countDisplay = s.source_count > 1 ? `<span class="story-count">+${s.source_count}</span>` : '';
+        const displayHeadline = (currentSort === 'new' && s.original_headline) ? s.original_headline : s.headline;
+
+        // Curation icon indicators
+        const icons = [];
+        if (s.breaking) icons.push('<span title="BREAKING" style="color:#e04040;font-size:10px;font-weight:700;">BREAKING</span>');
+        if (s.note) icons.push('<span title="Has note" style="color:#c06ece;">&#9998;</span>');
+
+        // Expanded view: items with swap-primary buttons
+        const itemsHtml = s.items.map(item => `
+            <div class="item-row">
+                <label>
+                    <input type="checkbox" class="item-check" value="${esc(item.id)}" data-cluster="${esc(s.id)}">
+                    <span class="item-source">${esc(item.source)}</span>
+                    ${esc(trunc(item.headline, 60))}
+                </label>
+                <button class="swap-btn" onclick="swapPrimary('${esc(s.id)}', '${esc(item.url)}')" title="Make primary link">SWAP</button>
+            </div>
+        `).join('');
+
+        const noteDisplay = s.note ? `<div class="note-display">${esc(s.note)}</div>` : '';
+
+        const energy = wireEnergy(s);
+
+        return `
+        <li class="${classes.join(' ')}" data-id="${esc(s.id)}">
+            <div class="wire-ball" style="--energy:${energy.toFixed(3)}"></div>
+            <div class="story-row-body">
+                <div class="story-main">
+                    <span class="story-headline" onclick="editHeadline(this, '${esc(s.id)}')" title="Click to edit">${esc(displayHeadline)}</span>
+                    <span class="story-meta">
+                        <span class="story-source">via ${esc(s.source)}</span>${countDisplay}
+                        <span class="story-category" onclick="editCategory(this, '${esc(s.id)}')" title="Click to change">${esc((s.category || '').toUpperCase())}</span>
+                        <span class="story-time">${timeAgo(s.published_at)}</span>
+                        ${icons.join(' ')}
+                    </span>
+                </div>
+                ${alsoLine}
+                <div class="curation-bar">
+                    <button class="cur-btn ${s.pinned ? 'active' : ''}" onclick="togglePin('${esc(s.id)}', ${s.pinned ? 0 : 1})" title="Pin">${s.pinned ? '&#9733; UNPIN' : '&#9734; PIN'}</button>
+                    <button class="cur-btn ${s.hidden ? 'active' : ''}" onclick="toggleHide('${esc(s.id)}', ${s.hidden ? 0 : 1})" title="Hide">${s.hidden ? '&#9673; UNHIDE' : '&#9675; HIDE'}</button>
+                    <button class="cur-btn ${s.locked ? 'active' : ''}" onclick="toggleLock('${esc(s.id)}', ${s.locked ? 0 : 1})" title="Lock">${s.locked ? '&#128275; UNLOCK' : '&#128274; LOCK'}</button>
+                    <button class="cur-btn ${s.breaking ? 'breaking-active' : ''}" onclick="toggleBreaking('${esc(s.id)}', ${s.breaking ? 0 : 1})" title="Breaking">&#9889; ${s.breaking ? 'UNBREAK' : 'BREAKING'}</button>
+                    <button class="cur-btn kill-btn" onclick="notNews('${esc(s.id)}')" title="Not news — remove from feed">&#10005; NOT NEWS</button>
+                    <button class="cur-btn ${s.boost > 0 ? 'boost-active' : ''}" onclick="setBoost('${esc(s.id)}', ${s.boost > 0 ? 0 : 1})" title="Boost up">&#9650; BOOST</button>
+                    <button class="cur-btn ${s.boost < 0 ? 'demote-active' : ''}" onclick="setBoost('${esc(s.id)}', ${s.boost < 0 ? 0 : -1})" title="Demote">&#9660; DEMOTE</button>
+                    <button class="cur-btn" onclick="showFlagMenu(this, '${esc(s.id)}')" title="Flag issue">&#9873; FLAG</button>
+                    <button class="cur-btn ${s.note ? 'note-active' : ''}" onclick="promptNote('${esc(s.id)}', this)" title="Editorial note">&#9998; NOTE</button>
+                    <button class="cur-btn" onclick="promptExpiry('${esc(s.id)}')" title="Override expiry">&#9201; EXPIRY</button>
+                    <button class="cur-btn" onclick="toggleExpand('${esc(s.id)}')" title="Expand items">&#9776; EXPAND</button>
+                </div>
+                <div class="story-expanded" id="expand-${s.id}">
+                    ${noteDisplay}
+                    ${itemsHtml}
+                    <div class="split-bar">
+                        <button class="cur-btn" onclick="splitSelected('${esc(s.id)}')">SPLIT CHECKED</button>
+                    </div>
+                    <div class="merge-bar">
+                        <input type="text" placeholder="Target cluster ID to merge into..." id="merge-target-${s.id}">
+                        <button class="cur-btn" onclick="mergeInto('${esc(s.id)}')">MERGE INTO</button>
+                    </div>
+                </div>
+            </div>
+        </li>`;
+    }).join('');
+
+    // Pagination
+    const totalPages = Math.ceil(total / storiesPerPage);
+    const pag = document.getElementById('pagination');
+    pag.innerHTML = `
+        <button ${storiesPage === 0 ? 'disabled' : ''} onclick="storiesPage--; fetchStories();">PREV</button>
+        <span>${storiesPage + 1} / ${totalPages || 1} (${total} stories)</span>
+        <button ${storiesPage >= totalPages - 1 ? 'disabled' : ''} onclick="storiesPage++; fetchStories();">NEXT</button>
+    `;
+}
+
+// ── Curation Actions ─────────────────────────────────────────────────
+function editHeadline(el, clusterId) {
+    const current = el.textContent;
+    const input = document.createElement('input');
+    input.className = 'inline-edit';
+    input.value = current;
+    el.textContent = '';
+    el.appendChild(input);
+    input.focus();
+    input.select();
+
+    async function save() {
+        const val = input.value.trim();
+        if (val && val !== current) {
+            await apiPost('edit-headline', { cluster_id: clusterId, headline: val });
+            fetchCurationLog();
+        }
+        el.textContent = val || current;
+    }
+
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+        if (e.key === 'Escape') { el.textContent = current; }
+    });
+}
+
+function editCategory(el, clusterId) {
+    const cats = ['tech', 'markets', 'politics', 'world', 'general'];
+    const dropdown = document.createElement('ul');
+    dropdown.className = 'cat-dropdown';
+    const rect = el.getBoundingClientRect();
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.top = rect.bottom + 'px';
+    dropdown.style.position = 'fixed';
+
+    cats.forEach(cat => {
+        const li = document.createElement('li');
+        li.textContent = cat.toUpperCase();
+        li.addEventListener('click', async () => {
+            await apiPost('edit-category', { cluster_id: clusterId, category: cat });
+            el.textContent = cat.toUpperCase();
+            document.body.removeChild(dropdown);
+            fetchCurationLog();
+            fetchStories();
+        });
+        dropdown.appendChild(li);
+    });
+
+    document.body.appendChild(dropdown);
+    setTimeout(() => {
+        document.addEventListener('click', function close(e) {
+            if (!dropdown.contains(e.target)) {
+                if (dropdown.parentNode) document.body.removeChild(dropdown);
+                document.removeEventListener('click', close);
+            }
+        });
+    }, 10);
+}
+
+async function togglePin(clusterId, pinned) {
+    await apiPost('pin', { cluster_id: clusterId, pinned });
+    fetchStories();
+    fetchCurationLog();
+}
+
+async function toggleHide(clusterId, hidden) {
+    await apiPost('hide', { cluster_id: clusterId, hidden });
+    fetchStories();
+    fetchCurationLog();
+}
+
+async function toggleLock(clusterId, locked) {
+    await apiPost('lock', { cluster_id: clusterId, locked });
+    fetchStories();
+    fetchCurationLog();
+}
+
+async function toggleBreaking(clusterId, breaking) {
+    await apiPost('breaking', { cluster_id: clusterId, breaking });
+    fetchStories();
+    fetchCurationLog();
+}
+
+async function notNews(clusterId) {
+    if (!confirm('Mark as not news? It will be removed from the feed.')) return;
+    await apiPost('not-news', { cluster_id: clusterId });
+    fetchStories();
+    fetchCurationLog();
+}
+
+async function setBoost(clusterId, boost) {
+    await apiPost('boost', { cluster_id: clusterId, boost });
+    fetchStories();
+    fetchCurationLog();
+}
+
+async function swapPrimary(clusterId, sourceUrl) {
+    await apiPost('swap-primary', { cluster_id: clusterId, source_url: sourceUrl });
+    fetchStories();
+    fetchCurationLog();
+}
+
+function showFlagMenu(el, clusterId) {
+    const flags = ['miscategorized', 'bad_headline', 'bad_merge', 'duplicate', 'stale'];
+    const dropdown = document.createElement('ul');
+    dropdown.className = 'flag-dropdown';
+    const rect = el.getBoundingClientRect();
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.top = rect.bottom + 'px';
+
+    flags.forEach(flag => {
+        const li = document.createElement('li');
+        li.textContent = flag.replace('_', ' ').toUpperCase();
+        li.addEventListener('click', async () => {
+            await apiPost('flag', { cluster_id: clusterId, flag_type: flag });
+            if (dropdown.parentNode) document.body.removeChild(dropdown);
+            fetchCurationLog();
+        });
+        dropdown.appendChild(li);
+    });
+
+    document.body.appendChild(dropdown);
+    setTimeout(() => {
+        document.addEventListener('click', function close(e) {
+            if (!dropdown.contains(e.target) && e.target !== el) {
+                if (dropdown.parentNode) document.body.removeChild(dropdown);
+                document.removeEventListener('click', close);
+            }
+        });
+    }, 10);
+}
+
+async function promptNote(clusterId, el) {
+    const note = prompt('Editorial note (leave empty to clear):');
+    if (note === null) return;
+    await apiPost('note', { cluster_id: clusterId, note });
+    fetchStories();
+    fetchCurationLog();
+}
+
+async function promptExpiry(clusterId) {
+    const input = prompt('Set expiry (ISO datetime, e.g. 2025-12-31T23:59:59Z):');
+    if (!input) return;
+    await apiPost('set-expiry', { cluster_id: clusterId, expires_at: input });
+    fetchStories();
+    fetchCurationLog();
+}
+
+function toggleExpand(clusterId) {
+    const el = document.getElementById(`expand-${clusterId}`);
+    if (el) el.classList.toggle('open');
+}
+
+async function splitSelected(clusterId) {
+    const checks = document.querySelectorAll(`#expand-${clusterId} .item-check:checked`);
+    const itemIds = Array.from(checks).map(c => c.value);
+    if (itemIds.length === 0) { alert('Select items to split'); return; }
+    const result = await apiPost('split', { cluster_id: clusterId, item_ids: itemIds });
+    if (result.status === 'ok') {
+        fetchStories();
+        fetchCurationLog();
+    } else {
+        alert(result.error || 'Split failed');
+    }
+}
+
+async function mergeInto(sourceId) {
+    const targetInput = document.getElementById(`merge-target-${sourceId}`);
+    const targetId = targetInput.value.trim();
+    if (!targetId) { alert('Enter target cluster ID'); return; }
+    const result = await apiPost('merge', { source_cluster_id: sourceId, target_cluster_id: targetId });
+    if (result.status === 'ok') {
+        fetchStories();
+        fetchCurationLog();
+    } else {
+        alert(result.error || 'Merge failed');
+    }
+}
+
+// ── Live Config ──────────────────────────────────────────────────────
+async function setConfig(key, value) {
+    const result = await apiPost('config', { key, value });
+    if (result.status === 'ok') {
+        fetchStatus();
+        fetchCurationLog();
+    } else {
+        alert(result.error || 'Config update failed');
+    }
+}
+
+// ── Curation Log ─────────────────────────────────────────────────────
+async function fetchCurationLog() {
+    try {
+        const resp = await fetch('/api/river/curation-log?limit=50');
+        const data = await resp.json();
+        const container = document.getElementById('curation-log-list');
+        container.innerHTML = data.entries.map(e => {
+            const d = e.detail || {};
+            const hl = d.headline ? trunc(d.headline, 50) : null;
+            const q = s => `"${s}"`;
+            let sentence = '';
+
+            if (e.action === 'edit_headline') {
+                sentence = hl ? `The headline ${q(trunc(d.before, 40))} was rewritten to ${q(trunc(d.after, 40))}` : `A headline was rewritten to ${q(trunc(d.after, 40))}`;
+            } else if (e.action === 'edit_category') {
+                sentence = hl ? `The item ${q(hl)} was recategorized from ${d.before} to ${d.after}` : `An item was recategorized from ${d.before} to ${d.after}`;
+            } else if (e.action === 'config_change') {
+                sentence = `Config ${d.key} was changed from ${d.before} to ${d.after}`;
+            } else if (e.action === 'merge') {
+                sentence = hl ? `The item ${q(hl)} was merged into another cluster` : `A cluster was merged into another cluster`;
+            } else if (e.action === 'split') {
+                sentence = hl ? `${d.new_cluster_size} items were split from ${q(hl)}` : `${d.new_cluster_size} items were split into a new cluster`;
+            } else if (e.action === 'swap_primary') {
+                sentence = hl ? `The item ${q(hl)} had its primary source swapped from ${d.old_source} to ${d.new_source}` : `Primary source was swapped from ${d.old_source} to ${d.new_source}`;
+            } else if (e.action.startsWith('flag_')) {
+                const flagName = e.action.replace('flag_', '').replace(/_/g, ' ');
+                sentence = hl ? `The item ${q(hl)} was flagged as ${flagName}` : `An item was flagged as ${flagName}`;
+                if (d.detail) sentence += `: ${d.detail}`;
+            } else if (e.action === 'breaking_on') {
+                sentence = hl ? `The item ${q(hl)} was marked as BREAKING` : `An item was marked as BREAKING`;
+            } else if (e.action === 'breaking_off') {
+                sentence = hl ? `The item ${q(hl)} had BREAKING removed` : `An item had BREAKING removed`;
+            } else if (e.action === 'kill' || e.action === 'not_news') {
+                sentence = hl ? `The item ${q(hl)} was removed as not news` : `An item was removed as not news`;
+            } else if (e.action === 'pin') {
+                sentence = hl ? `The item ${q(hl)} was pinned` : `An item was pinned`;
+            } else if (e.action === 'unpin') {
+                sentence = hl ? `The item ${q(hl)} was unpinned` : `An item was unpinned`;
+            } else if (e.action === 'hide') {
+                sentence = hl ? `The item ${q(hl)} was hidden` : `An item was hidden`;
+            } else if (e.action === 'unhide') {
+                sentence = hl ? `The item ${q(hl)} was unhidden` : `An item was unhidden`;
+            } else if (e.action === 'lock') {
+                sentence = hl ? `The item ${q(hl)} was locked` : `An item was locked`;
+            } else if (e.action === 'unlock') {
+                sentence = hl ? `The item ${q(hl)} was unlocked` : `An item was unlocked`;
+            } else if (e.action === 'boost') {
+                sentence = hl ? `The item ${q(hl)} was boosted` : `An item was boosted`;
+            } else if (e.action === 'demote') {
+                sentence = hl ? `The item ${q(hl)} was demoted` : `An item was demoted`;
+            } else if (e.action === 'unboost') {
+                sentence = hl ? `The item ${q(hl)} had its boost cleared` : `An item had its boost cleared`;
+            } else if (e.action === 'note') {
+                sentence = d.note
+                    ? (hl ? `A note was added to ${q(hl)}: ${q(trunc(d.note, 40))}` : `A note was added: ${q(trunc(d.note, 40))}`)
+                    : (hl ? `The note on ${q(hl)} was cleared` : `A note was cleared`);
+            } else if (e.action === 'set_expiry') {
+                sentence = hl ? `The expiry on ${q(hl)} was set to ${d.new_expires_at}` : `An expiry was set to ${d.new_expires_at}`;
+            } else {
+                sentence = hl ? `The item ${q(hl)} had action: ${e.action}` : `Action: ${e.action}`;
+            }
+
+            const actionClass = e.action.replace(/ /g, '_');
+            return `<div class="log-entry">
+                <span class="log-action ${actionClass}">${e.action.replace(/_/g, ' ')}</span>
+                <span class="log-time">${fmtTime(e.created_at)}</span>
+                <div class="log-detail">${sentence}</div>
+            </div>`;
+        }).join('');
+    } catch (e) {
+        console.error('Curation log fetch error:', e);
+    }
+}
+
+// ── Fetch Status ─────────────────────────────────────────────────────
 async function fetchStatus() {
     try {
         const resp = await fetch('/api/river/status');
         const data = await resp.json();
 
-        // Jobs
         for (const id of ['rss', 'search', 'rewrite', 'cleanup']) {
             const job = data.jobs[id];
             if (job) {
                 jobNextRuns[id] = job.next_run;
                 document.getElementById(`${id}-next`).textContent = fmtTime(job.next_run);
-                document.getElementById(`${id}-interval`).textContent = job.interval;
             }
         }
 
-        // DB stats
         document.getElementById('stat-clusters').textContent = data.db.clusters;
         document.getElementById('stat-raw').textContent = data.db.raw_items;
         document.getElementById('stat-pending').textContent = data.db.pending_rewrites;
+        document.getElementById('stat-filters').textContent = data.db.active_filters;
+        document.getElementById('stat-filtered-24h').textContent = data.db.filtered_24h;
 
-        // Config
-        document.getElementById('cfg-threshold').textContent = data.config.similarity_threshold;
-        document.getElementById('cfg-lookback').textContent = data.config.lookback_hours;
-        document.getElementById('cfg-model').textContent = data.config.model;
-        document.getElementById('cfg-batch').textContent = data.config.batch_size;
+        // Update tab badges
+        document.getElementById('tab-badge-filters').textContent = data.db.active_filters != null ? `(${data.db.active_filters})` : '';
+        document.getElementById('tab-badge-system').textContent = data.db.pending_rewrites > 0 ? `(${data.db.pending_rewrites} pending)` : '';
+
+        // Populate config inputs with current values (only if not focused)
+        const fields = {
+            'cfg-similarity': data.config.similarity_threshold,
+            'cfg-lookback': data.config.lookback_hours,
+            'cfg-model': data.config.model,
+            'cfg-batch': data.config.batch_size,
+            'cfg-rss-interval': data.config.rss_interval_minutes,
+            'cfg-search-interval': data.config.search_interval_minutes,
+        };
+        for (const [id, val] of Object.entries(fields)) {
+            const el = document.getElementById(id);
+            if (el && document.activeElement !== el) el.value = val;
+        }
     } catch (e) {
         console.error('Status fetch error:', e);
     }
 }
 
+// ── Fetch Events ─────────────────────────────────────────────────────
 async function fetchEvents() {
-    if (paused) return;
     try {
-        const filterParam = eventFilter !== 'all' ? `&event_type=${eventFilter}` : '';
-        // For error filter, use 'error' type
-        const typeMap = { ingest: '', cluster: '', rewrite: 'rewrite', error: 'error' };
-        const resp = await fetch(`/api/river/events?limit=200`);
+        const resp = await fetch('/api/river/events?limit=100');
         const data = await resp.json();
-
         let events = data.events;
         if (eventFilter !== 'all') {
-            events = events.filter(ev => {
-                const tag = eventTag(ev.type);
-                return tag === eventFilter;
-            });
+            events = events.filter(ev => eventTag(ev.type) === eventFilter);
         }
 
         const list = document.getElementById('event-list');
-        list.innerHTML = events.map(ev => {
+        list.innerHTML = events.slice(0, 50).map(ev => {
             const tag = eventTag(ev.type);
             return `<li class="event-item">
                 <span class="ev-time">${fmtTime(ev.ts)}</span>
-                <span class="ev-tag ${tag}">${ev.type.toUpperCase()}</span>
-                <span class="ev-msg">${esc(eventMsg(ev))}</span>
+                <span class="ev-tag ${tag}">${ev.type.replace('_', ' ').toUpperCase()}</span>
+                <div class="ev-msg">${esc(eventMsg(ev))}</div>
             </li>`;
         }).join('');
     } catch (e) {
@@ -657,28 +1637,118 @@ async function fetchEvents() {
     }
 }
 
-async function fetchPipeline() {
+// ── Recluster ────────────────────────────────────────────────────────
+async function doRecluster() {
+    const status = document.getElementById('recluster-status');
+    status.textContent = 'rebuilding...';
     try {
-        const resp = await fetch('/api/river/pipeline?limit=50');
-        const data = await resp.json();
-
-        const tbody = document.getElementById('pipeline-body');
-        tbody.innerHTML = data.items.map(item => {
-            const statusClass = item.rewrite_status === 'REWRITTEN' ? 'rewritten' : 'pending';
-            return `<tr>
-                <td>${esc(item.source)}</td>
-                <td title="${esc(item.headline)}">${esc(trunc(item.headline, 50))}</td>
-                <td><span class="cat-badge">${esc(item.cluster_category || item.feed_category)}</span></td>
-                <td style="color:#555;">${esc(item.cluster_id || '--')}</td>
-                <td><span class="status-badge ${statusClass}">${item.rewrite_status}</span></td>
-            </tr>`;
-        }).join('');
+        const r = await fetch('/api/recluster', { method: 'POST' });
+        const d = await r.json();
+        status.textContent = `${d.items} items -> ${d.clusters} clusters`;
+        fetchStories();
+        fetchStatus();
     } catch (e) {
-        console.error('Pipeline fetch error:', e);
+        status.textContent = 'error: ' + e.message;
     }
 }
 
-// ── Countdown ticker ────────────────────────────────────────────────
+// ── Backfill / Reboot ────────────────────────────────────────────────
+async function triggerBackfill() {
+    const btn = document.getElementById('backfill-btn');
+    btn.disabled = true;
+    btn.textContent = 'BACKFILLING...';
+    try {
+        await fetch('/api/river/backfill', { method: 'POST' });
+        const poll = setInterval(async () => {
+            const r = await fetch('/api/river/events?limit=10');
+            const d = await r.json();
+            const done = d.events.find(e => e.type === 'ingest_done' && e.job === 'backfill');
+            if (done) {
+                clearInterval(poll);
+                btn.disabled = false;
+                btn.textContent = 'BACKFILL 48H';
+                fetchStories();
+                fetchStatus();
+            }
+        }, 3000);
+        setTimeout(() => { clearInterval(poll); btn.disabled = false; btn.textContent = 'BACKFILL 48H'; }, 300000);
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'BACKFILL 48H';
+    }
+}
+
+async function triggerReboot() {
+    if (!confirm('Wipe database and reboot? Curation overrides will be cleared but the curation log is preserved.')) return;
+    const btn = document.getElementById('reboot-btn');
+    btn.disabled = true;
+    btn.textContent = 'REBOOTING...';
+    try {
+        const resp = await fetch('/api/river/reboot', { method: 'POST' });
+        const data = await resp.json();
+        if (data.status === 'already_booting') {
+            btn.textContent = 'ALREADY BOOTING';
+            setTimeout(() => { btn.textContent = 'REBOOT'; btn.disabled = false; }, 3000);
+            return;
+        }
+        const poll = setInterval(async () => {
+            try {
+                const r = await fetch('/api/boot-status');
+                const s = await r.json();
+                const pct = Math.round(((s.polling_progress + s.clustering_progress + s.rewriting_progress) / 3) * 100);
+                btn.textContent = `BOOTING ${pct}%`;
+                fetchStatus();
+                if (s.phase === 'ready') {
+                    clearInterval(poll);
+                    btn.disabled = false;
+                    btn.textContent = 'REBOOT';
+                    fetchStories();
+                    fetchStatus();
+                    fetchEvents();
+                }
+            } catch (_) {}
+        }, 2000);
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'REBOOT';
+    }
+}
+
+// ── Tab controls (story sort/category) ───────────────────────────────
+document.querySelectorAll('#sort-tabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#sort-tabs .tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSort = btn.dataset.sort;
+        storiesPage = 0;
+        fetchStories();
+    });
+});
+
+document.querySelectorAll('#cat-tabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#cat-tabs .tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCat = btn.dataset.cat;
+        storiesPage = 0;
+        fetchStories();
+    });
+});
+
+// ── Event filter buttons ─────────────────────────────────────────────
+document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        eventFilter = btn.dataset.filter;
+        fetchEvents();
+    });
+});
+
+// ── Show hidden toggle ───────────────────────────────────────────────
+document.getElementById('show-hidden').addEventListener('change', () => { storiesPage = 0; fetchStories(); });
+
+// ── Countdown ticker ─────────────────────────────────────────────────
 function updateCountdowns() {
     for (const id of ['rss', 'search', 'rewrite', 'cleanup']) {
         const el = document.getElementById(`${id}-countdown`);
@@ -686,68 +1756,141 @@ function updateCountdowns() {
     }
 }
 
-// ── Source Scores ────────────────────────────────────────────────────
-let scoresData = [];
-let scoreSort = { key: 'total', asc: false };
+// ── Filters ──────────────────────────────────────────────────────────
+let filteredItemsPage = 0;
+const filteredItemsPerPage = 50;
 
-function accessClass(val) {
-    if (val >= 100) return 'score-free';
-    if (val >= 60) return 'score-metered';
-    return 'score-paywall';
-}
-
-async function fetchScores() {
+async function fetchFilters() {
     try {
-        const resp = await fetch('/api/scores');
+        const resp = await fetch('/api/river/filters');
         const data = await resp.json();
-        scoresData = data.scores;
-        renderScores();
+        renderFilters(data.filters);
     } catch (e) {
-        console.error('Scores fetch error:', e);
+        console.error('Filters fetch error:', e);
     }
 }
 
-function renderScores() {
-    const sorted = [...scoresData].sort((a, b) => {
-        const key = scoreSort.key;
-        if (key === 'source') {
-            return scoreSort.asc ? a.source.localeCompare(b.source) : b.source.localeCompare(a.source);
-        }
-        return scoreSort.asc ? a[key] - b[key] : b[key] - a[key];
-    });
-
-    const tbody = document.getElementById('scores-body');
-    tbody.innerHTML = sorted.map(s => `<tr>
-        <td class="source-name">${esc(s.source)}</td>
-        <td class="score-total">${s.total}</td>
-        <td>${s.reliability}</td>
-        <td class="${accessClass(s.access)}">${s.access}</td>
-        <td>${s.reputation}</td>
-    </tr>`).join('');
+function renderFilters(filters) {
+    const container = document.getElementById('filters-list');
+    container.innerHTML = filters.map(f => {
+        const onOff = f.enabled ? 'on' : 'off';
+        const disabledClass = f.enabled ? '' : ' disabled';
+        return `<div class="filter-row${disabledClass}">
+            <span class="filter-type-badge">${esc(f.filter_type)}</span>
+            <span class="filter-name" title="${esc(f.pattern)}">${esc(f.name)}</span>
+            <button class="filter-toggle ${onOff}" onclick="toggleFilter(${f.id}, ${f.enabled ? 0 : 1})">${onOff.toUpperCase()}</button>
+            <button class="filter-del" onclick="deleteFilter(${f.id})" title="Delete filter">&times;</button>
+        </div>`;
+    }).join('');
 }
 
-document.querySelectorAll('.scores-table th').forEach(th => {
-    th.addEventListener('click', () => {
-        const key = th.dataset.sort;
-        if (scoreSort.key === key) {
-            scoreSort.asc = !scoreSort.asc;
-        } else {
-            scoreSort.key = key;
-            scoreSort.asc = key === 'source';
-        }
-        renderScores();
+async function toggleFilter(id, enabled) {
+    await fetch(`/api/river/filters/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
     });
-});
+    fetchFilters();
+}
 
-// ── Init ────────────────────────────────────────────────────────────
+async function deleteFilter(id) {
+    if (!confirm('Delete this filter?')) return;
+    await fetch(`/api/river/filters/${id}`, { method: 'DELETE' });
+    fetchFilters();
+}
+
+async function addFilter() {
+    const name = document.getElementById('filter-add-name').value.trim();
+    const pattern = document.getElementById('filter-add-pattern').value.trim();
+    const filter_type = document.getElementById('filter-add-type').value;
+    if (!name || !pattern) { alert('Name and pattern required'); return; }
+
+    const resp = await fetch('/api/river/filters', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, pattern, filter_type }),
+    });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    document.getElementById('filter-add-name').value = '';
+    document.getElementById('filter-add-pattern').value = '';
+    document.getElementById('filter-test-results').style.display = 'none';
+    fetchFilters();
+}
+
+async function testNewFilter() {
+    const pattern = document.getElementById('filter-add-pattern').value.trim();
+    if (!pattern) { alert('Enter a pattern to test'); return; }
+
+    const resp = await fetch('/api/river/filters/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pattern }),
+    });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+
+    const results = document.getElementById('filter-test-results');
+    results.style.display = '';
+    if (data.matches.length === 0) {
+        results.innerHTML = `<div style="color:#4a9e4a;">No matches in ${data.tested} recent headlines</div>`;
+    } else {
+        results.innerHTML = `<div style="color:#ffb000;margin-bottom:4px;">${data.matches.length} matches in ${data.tested} headlines:</div>` +
+            data.matches.slice(0, 20).map(m => `<div>${esc(m.headline)} <span style="color:#555;">via ${esc(m.source)}</span></div>`).join('');
+    }
+}
+
+async function fetchFilteredItems() {
+    try {
+        const search = document.getElementById('filtered-items-search').value.trim();
+        const params = new URLSearchParams({
+            limit: filteredItemsPerPage,
+            offset: filteredItemsPage * filteredItemsPerPage,
+        });
+        if (search) params.append('search', search);
+
+        const resp = await fetch(`/api/river/filtered-items?${params}`);
+        const data = await resp.json();
+        renderFilteredItems(data.items, data.total);
+    } catch (e) {
+        console.error('Filtered items fetch error:', e);
+    }
+}
+
+function renderFilteredItems(items, total) {
+    const container = document.getElementById('filtered-items-list');
+    container.innerHTML = items.map(item => `
+        <div class="filtered-item-row">
+            <div class="filtered-item-headline">${esc(item.headline)}</div>
+            <div class="filtered-item-meta">${esc(item.source_name)} &middot; ${timeAgo(item.filtered_at)}</div>
+            <div class="filtered-item-filter">caught by: ${esc(item.filter_name)}</div>
+        </div>
+    `).join('');
+
+    const totalPages = Math.ceil(total / filteredItemsPerPage);
+    const pag = document.getElementById('filtered-items-pagination');
+    pag.innerHTML = `
+        <button ${filteredItemsPage === 0 ? 'disabled' : ''} onclick="filteredItemsPage--; fetchFilteredItems();">PREV</button>
+        <span>${filteredItemsPage + 1} / ${totalPages || 1} (${total})</span>
+        <button ${filteredItemsPage >= totalPages - 1 ? 'disabled' : ''} onclick="filteredItemsPage++; fetchFilteredItems();">NEXT</button>
+    `;
+}
+
+let _filteredItemsDebounce = null;
+function debouncedFetchFilteredItems() {
+    clearTimeout(_filteredItemsDebounce);
+    filteredItemsPage = 0;
+    _filteredItemsDebounce = setTimeout(fetchFilteredItems, 300);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────
 fetchStatus();
-fetchEvents();
-fetchPipeline();
-fetchScores();
+fetchStories();
+fetchCurationLog();
 
 setInterval(fetchStatus, 5000);
-setInterval(fetchEvents, 3000);
-setInterval(fetchPipeline, 10000);
+setInterval(fetchEvents, 5000);
+setInterval(fetchCurationLog, 5000);
 setInterval(updateCountdowns, 1000);
 </script>
 </body>

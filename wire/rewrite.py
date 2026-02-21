@@ -60,8 +60,10 @@ async def rewrite_pending():
     rows = conn.execute("""
         SELECT sc.id, sc.rewritten_headline, sc.source_count
         FROM story_clusters sc
+        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
         WHERE sc.expires_at > ?
         AND sc.source_count >= 2
+        AND (co.locked IS NULL OR co.locked = 0)
         AND EXISTS (
             SELECT 1 FROM raw_items ri
             WHERE ri.cluster_id = sc.id

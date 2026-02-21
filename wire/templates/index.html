@@ -100,11 +100,74 @@ header {
     padding: 6px 0;
     border-bottom: 1px solid #111;
     animation: fadeIn 0.4s ease;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
 }
 
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(-4px); }
     to { opacity: 1; transform: translateY(0); }
+}
+
+.story-body { flex: 1; min-width: 0; }
+
+/* ── Electric ball ───────────────────────────────────────────────── */
+.wire-ball {
+    --energy: 0;
+    --size: calc(6px + var(--energy) * 10px);
+    --glow: calc(var(--energy) * 25px);
+    --glow2: calc(var(--energy) * 50px);
+    --glow3: calc(var(--energy) * 80px);
+    --bright: calc(0.08 + var(--energy) * 0.92);
+    width: var(--size);
+    height: var(--size);
+    min-width: 6px;
+    min-height: 6px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+    background: radial-gradient(circle at 30% 30%,
+        hsla(40, 100%, 95%, var(--bright)),
+        hsla(30, 100%, 65%, var(--bright)),
+        hsla(22, 100%, 50%, calc(var(--bright) * 0.7)),
+        hsla(15, 100%, 30%, calc(var(--bright) * 0.3))
+    );
+    box-shadow:
+        0 0 calc(var(--energy) * 3px) hsla(30, 100%, 80%, var(--bright)),
+        0 0 var(--glow) hsla(25, 100%, 55%, calc(var(--bright) * 0.9)),
+        0 0 var(--glow2) hsla(20, 100%, 45%, calc(var(--bright) * 0.5)),
+        0 0 var(--glow3) hsla(15, 100%, 35%, calc(var(--bright) * 0.2));
+    animation:
+        wirePulse calc(2.5s - var(--energy) * 1s) ease-in-out infinite,
+        wireCreepScale calc(4s - var(--energy) * 2s) ease-in-out infinite alternate;
+    position: relative;
+}
+
+.wire-ball::after {
+    content: '';
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    background: transparent;
+    box-shadow: 0 0 calc(var(--energy) * 12px) hsla(25, 100%, 65%, calc(var(--energy) * 0.5));
+    animation: wireGlow calc(3s - var(--energy) * 1.5s) ease-in-out infinite alternate;
+}
+
+@keyframes wirePulse {
+    0% { opacity: 0.85; filter: brightness(1); }
+    50% { opacity: 1; filter: brightness(1.1); }
+    100% { opacity: 0.85; filter: brightness(1); }
+}
+
+@keyframes wireCreepScale {
+    0% { transform: scale(1); }
+    100% { transform: scale(calc(1 + var(--energy) * 0.2)); }
+}
+
+@keyframes wireGlow {
+    0% { opacity: 0.4; }
+    100% { opacity: 1; }
 }
 
 .story-main {
@@ -314,9 +377,168 @@ header {
     padding: 40px;
     color: #444;
 }
+
+/* ── Boot overlay ─────────────────────────────────────────────────── */
+#boot-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #0a0a0a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+}
+
+#boot-overlay.hidden { display: none; }
+
+.boot-logo {
+    font-size: 36px;
+    font-weight: 700;
+    color: #ffb000;
+    letter-spacing: 6px;
+}
+
+.boot-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 340px;
+}
+
+.boot-step {
+    color: #333;
+    font-size: 12px;
+    transition: color 0.3s;
+}
+
+.boot-step.active { color: #cccccc; }
+.boot-step.done   { color: #4a9e4a; }
+
+.boot-step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.boot-icon {
+    width: 18px;
+    text-align: center;
+    flex-shrink: 0;
+}
+
+.boot-step .boot-detail {
+    color: #555;
+    margin-left: auto;
+    font-size: 11px;
+}
+
+.boot-bar-track {
+    width: 100%;
+    height: 4px;
+    background: #1a1a1a;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.boot-bar-fill {
+    height: 100%;
+    width: 0%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+}
+
+.boot-step.active .boot-bar-fill { background: #ffb000; }
+.boot-step.done   .boot-bar-fill { background: #4a9e4a; width: 100% !important; }
+
+/* Waiting steps: dim track */
+.boot-step:not(.active):not(.done) .boot-bar-track { background: #111; }
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid #ffb000;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+#boot-enter {
+    display: none;
+    background: transparent;
+    border: 1px solid #ffb000;
+    color: #ffb000;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 28px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: background 0.2s;
+}
+
+#boot-enter:hover { background: rgba(255,176,0,0.1); }
+
+/* ── Load-more button ─────────────────────────────────────────────── */
+#load-more {
+    display: none;
+    text-align: center;
+    padding: 12px 0;
+}
+
+#load-more button {
+    background: transparent;
+    border: 1px solid #333;
+    color: #666;
+    font-family: inherit;
+    font-size: 11px;
+    padding: 6px 20px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+#load-more button:hover { color: #ccc; border-color: #555; }
 </style>
 </head>
 <body>
+<div id="boot-overlay">
+    <div class="boot-logo">WIRE</div>
+    <div class="boot-steps">
+        <div class="boot-step" id="step-polling">
+            <div class="boot-step-header">
+                <span class="boot-icon" id="icon-polling">○</span>
+                <span>Ingesting RSS feeds</span>
+                <span class="boot-detail" id="detail-polling"></span>
+            </div>
+            <div class="boot-bar-track"><div class="boot-bar-fill" id="bar-polling"></div></div>
+        </div>
+        <div class="boot-step" id="step-clustering">
+            <div class="boot-step-header">
+                <span class="boot-icon" id="icon-clustering">○</span>
+                <span>Building story clusters</span>
+                <span class="boot-detail" id="detail-clustering"></span>
+            </div>
+            <div class="boot-bar-track"><div class="boot-bar-fill" id="bar-clustering"></div></div>
+        </div>
+        <div class="boot-step" id="step-rewriting">
+            <div class="boot-step-header">
+                <span class="boot-icon" id="icon-rewriting">○</span>
+                <span>Rewriting headlines</span>
+                <span class="boot-detail" id="detail-rewriting"></span>
+            </div>
+            <div class="boot-bar-track"><div class="boot-bar-fill" id="bar-rewriting"></div></div>
+        </div>
+    </div>
+    <button id="boot-enter">ENTER WIRE</button>
+</div>
 <div id="app">
     <header>
         <div>
@@ -339,6 +561,7 @@ header {
         </div>
     </header>
     <div id="stories"><div class="loading">Connecting to wire...</div></div>
+    <div id="load-more"><button onclick="loadMore()">Show older story clusters</button></div>
 </div>
 <div class="status-bar">
     <span id="status-total">—</span>
@@ -347,16 +570,117 @@ header {
 
 <script>
 const AD_INTERVAL = 25;
+const PAGE_SIZE = 20;
 let currentSort = 'hot';
 let currentCat = 'all';
+let currentOffset = 0;
 let knownIds = new Set();
-let refreshTimer = null;
 
+/* ── Boot overlay logic ───────────────────────────────────────────── */
+const PHASES = ['polling', 'clustering', 'rewriting'];
+
+function updateBootUI(state) {
+    const phaseIdx = PHASES.indexOf(state.phase);
+
+    PHASES.forEach((p, i) => {
+        const step = document.getElementById('step-' + p);
+        const icon = document.getElementById('icon-' + p);
+        const detail = document.getElementById('detail-' + p);
+        const bar = document.getElementById('bar-' + p);
+
+        step.className = 'boot-step';
+        if (i < phaseIdx || state.phase === 'ready') {
+            step.classList.add('done');
+            icon.innerHTML = '✓';
+            bar.style.width = '100%';
+        } else if (i === phaseIdx) {
+            step.classList.add('active');
+            icon.innerHTML = '<span class="spinner"></span>';
+            const progress = state[p + '_progress'] || 0;
+            bar.style.width = Math.round(progress * 100) + '%';
+        } else {
+            icon.innerHTML = '○';
+            bar.style.width = '0%';
+        }
+
+        // Show phase-specific detail with percentage
+        if (p === 'polling') {
+            if (i === phaseIdx) {
+                const pct = Math.round((state.polling_progress || 0) * 100);
+                detail.textContent = state.detail ? `${state.detail} · ${pct}%` : `${pct}%`;
+            } else if (i < phaseIdx || state.phase === 'ready') {
+                detail.textContent = '100%';
+            } else {
+                detail.textContent = '';
+            }
+        }
+        if (p === 'clustering') {
+            if (i === phaseIdx) {
+                const pct = Math.round((state.clustering_progress || 0) * 100);
+                detail.textContent = state.clusters ? `${state.clusters} clusters · ${pct}%` : `${pct}%`;
+            } else if (i < phaseIdx || state.phase === 'ready') {
+                detail.textContent = state.clusters ? `${state.clusters} clusters` : '100%';
+            } else {
+                detail.textContent = '';
+            }
+        }
+        if (p === 'rewriting') {
+            if (i === phaseIdx) {
+                const pct = Math.round((state.rewriting_progress || 0) * 100);
+                detail.textContent = state.pending ? `${state.pending} pending · ${pct}%` : `${pct}%`;
+            } else if (state.phase === 'ready') {
+                detail.textContent = '100%';
+            } else {
+                detail.textContent = '';
+            }
+        }
+    });
+
+    if (state.phase === 'ready') {
+        document.getElementById('boot-enter').style.display = 'inline-block';
+    }
+}
+
+async function bootCheck() {
+    try {
+        const resp = await fetch('/api/boot-status');
+        const state = await resp.json();
+
+        if (state.phase === 'ready') {
+            // Already booted — skip overlay entirely
+            document.getElementById('boot-overlay').classList.add('hidden');
+            fetchStories();
+            return;
+        }
+
+        // Show overlay and start polling
+        updateBootUI(state);
+        const poll = setInterval(async () => {
+            try {
+                const r = await fetch('/api/boot-status');
+                const s = await r.json();
+                updateBootUI(s);
+                if (s.phase === 'ready') clearInterval(poll);
+            } catch (_) {}
+        }, 2000);
+    } catch (_) {
+        // API not ready yet, retry
+        setTimeout(bootCheck, 2000);
+    }
+}
+
+document.getElementById('boot-enter').addEventListener('click', () => {
+    document.getElementById('boot-overlay').classList.add('hidden');
+    fetchStories();
+});
+
+/* ── Tab controls ─────────────────────────────────────────────────── */
 document.querySelectorAll('#sort-tabs .tab').forEach(btn => {
     btn.addEventListener('click', () => {
         document.querySelectorAll('#sort-tabs .tab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentSort = btn.dataset.sort;
+        currentOffset = 0;
         knownIds.clear();
         fetchStories();
     });
@@ -367,11 +691,13 @@ document.querySelectorAll('#cat-tabs .tab').forEach(btn => {
         document.querySelectorAll('#cat-tabs .tab').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentCat = btn.dataset.cat;
+        currentOffset = 0;
         knownIds.clear();
         fetchStories();
     });
 });
 
+/* ── Helpers ──────────────────────────────────────────────────────── */
 function formatTime(iso) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -386,7 +712,6 @@ function formatTime(iso) {
     if (diffHr < 24) return `${diffHr}h ago`;
     if (diffDay < 7) return `${diffDay}d ago`;
 
-    // Fallback: date
     const mon = d.toLocaleString('en', { month: 'short' });
     return `${mon} ${d.getDate()}`;
 }
@@ -400,14 +725,42 @@ function formatFullDate(iso) {
     });
 }
 
+const TIER1_SOURCES = new Set([
+    'reuters', 'ap', 'associated press', 'bloomberg', 'bbc', 'nyt', 'new york times',
+    'the new york times', 'wsj', 'wall street journal', 'the wall street journal',
+    'cnn', 'financial times', 'ft', 'the washington post', 'washington post',
+    'the guardian', 'npr', 'al jazeera', 'axios', 'politico', 'the economist',
+    'techcrunch', 'the verge', 'ars technica', 'wired', 'cnbc', 'abc news',
+    'cbs news', 'nbc news', 'pbs', 'the atlantic', 'time', 'fortune',
+]);
+
+function wireEnergy(s) {
+    try {
+        const allNames = [s.source, ...(s.other_sources || []).map(o => o.name)].filter(Boolean);
+        const uniqueHeadlines = new Set((s.items || []).map(i => i.headline)).size || 1;
+        const coverage = Math.min(uniqueHeadlines, 15) / 15;
+
+        const t1 = allNames.filter(n => n && TIER1_SOURCES.has(n.toLowerCase())).length;
+        const quality = Math.min(t1, 5) / 5;
+
+        const ts = s.published_at || s.first_seen;
+        const hoursOld = ts ? Math.max(0, (Date.now() - new Date(ts).getTime()) / 3600000) : 48;
+        const recency = Math.max(0, 1 - hoursOld / 72);
+
+        const raw = (coverage * 0.55 + quality * 0.45) * (0.15 + recency * 0.85);
+        return Math.min(1, Math.max(0, raw));
+    } catch(e) { return 0; }
+}
+
 function renderStory(s) {
-    const others = s.other_sources.slice(0, 4).map(o =>
+    const shownSources = s.other_sources.slice(0, 3).map(o =>
         `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`
     ).join(' · ');
 
     const hasItems = s.items && s.items.length > 1;
-    const expandBtn = hasItems ? `<button class="expand-btn" onclick="toggleItems('${s.id}')">+</button>` : '';
-    const alsoLine = others ? `<div class="also">also: ${others}${expandBtn}</div>` : '';
+    const hiddenItems = hasItems ? s.items.length : 0;
+    const expandBtn = hasItems ? `<button class="expand-btn" onclick="toggleItems('${s.id}')">${hiddenItems > 0 ? `+${hiddenItems} more` : '+'}</button>` : '';
+    const alsoLine = shownSources ? `<div class="also">also: ${shownSources} ${expandBtn}</div>` : '';
 
     let itemsDetail = '';
     if (hasItems) {
@@ -424,13 +777,18 @@ function renderStory(s) {
     // Use original headline for NEW sort, rewritten for HOT
     const displayHeadline = (currentSort === 'new' && s.original_headline) ? s.original_headline : s.headline;
 
+    const energy = wireEnergy(s);
+
     return `<div class="story" data-id="${s.id}">
-        <div class="story-main">
-            <span class="headline"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(displayHeadline)}</a></span>
-            <span class="meta"><span class="source">via ${esc(s.source)}</span>${countDisplay}<span class="timestamp" title="${esc(fullDate)}">${esc(timeAgo)}</span></span>
+        <div class="wire-ball" style="--energy:${energy.toFixed(3)}"></div>
+        <div class="story-body">
+            <div class="story-main">
+                <span class="headline"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(displayHeadline)}</a></span>
+                <span class="meta"><span class="source">via ${esc(s.source)}</span>${countDisplay}<span class="timestamp" title="${esc(fullDate)}">${esc(timeAgo)}</span></span>
+            </div>
+            ${alsoLine}
+            ${itemsDetail}
         </div>
-        ${alsoLine}
-        ${itemsDetail}
     </div>`;
 }
 
@@ -445,31 +803,52 @@ function toggleItems(id) {
     const el = document.getElementById('items-' + id);
     if (!el) return;
     const isOpen = el.classList.toggle('open');
-    // Update button text
     const story = el.closest('.story');
     const btn = story.querySelector('.expand-btn');
-    if (btn) btn.textContent = isOpen ? '−' : '+';
+    if (btn) {
+        if (isOpen) {
+            btn.dataset.label = btn.textContent;
+            btn.textContent = '−';
+        } else {
+            btn.textContent = btn.dataset.label || '+';
+        }
+    }
 }
 
-async function fetchStories() {
+/* ── Fetch & pagination ───────────────────────────────────────────── */
+async function fetchStories(append) {
     try {
-        const url = `/api/stories?sort=${currentSort}&category=${currentCat}&limit=200`;
+        const url = `/api/stories?sort=${currentSort}&category=${currentCat}&limit=${PAGE_SIZE}&offset=${currentOffset}`;
         const resp = await fetch(url);
         const data = await resp.json();
 
         const container = document.getElementById('stories');
+
         let html = '';
         data.stories.forEach((s, i) => {
-            if (i > 0 && i % AD_INTERVAL === 0) {
+            if ((currentOffset + i) > 0 && (currentOffset + i) % AD_INTERVAL === 0) {
                 html += `<div class="ad-slot"><!-- ad --></div>`;
             }
             html += renderStory(s);
         });
 
-        container.innerHTML = html || '<div class="loading">No stories yet. Feeds loading...</div>';
+        if (append) {
+            container.insertAdjacentHTML('beforeend', html);
+        } else {
+            container.innerHTML = html || '<div class="loading">No stories yet. Feeds loading...</div>';
+        }
 
         const newIds = new Set(data.stories.map(s => s.id));
-        knownIds = newIds;
+        if (!append) knownIds = newIds;
+        else newIds.forEach(id => knownIds.add(id));
+
+        // Show/hide load-more button
+        const loadMoreEl = document.getElementById('load-more');
+        if (currentOffset + data.stories.length < data.total) {
+            loadMoreEl.style.display = 'block';
+        } else {
+            loadMoreEl.style.display = 'none';
+        }
 
         document.getElementById('status-total').textContent = `${data.total} stories`;
         document.getElementById('status-updated').textContent = `updated ${new Date(data.updated_at).toLocaleTimeString()}`;
@@ -478,8 +857,13 @@ async function fetchStories() {
     }
 }
 
-fetchStories();
-refreshTimer = setInterval(fetchStories, 30000);
+function loadMore() {
+    currentOffset += PAGE_SIZE;
+    fetchStories(true);
+}
+
+/* ── Start ────────────────────────────────────────────────────────── */
+bootCheck();
 </script>
 </body>
 </html>
