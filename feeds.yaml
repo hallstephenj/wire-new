@@ -1,13 +1,128 @@
 feeds:
-  markets:
-    - name: "Reuters Business"
-      url: "https://feeds.reuters.com/reuters/businessNews"
+  # ═══════════════════════════════════════════════════════════════════════
+  # Sourced from Techmeme Leaderboard (Feb 2026) — top 50 publications
+  # These are the sources most likely to break real news.
+  # Category assignment based on primary coverage area.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  tech:
+    # #1 Bloomberg (14.17%)
     - name: "Bloomberg"
-      url: "https://news.google.com/rss/search?q=bloomberg+markets&hl=en-US&gl=US&ceid=US:en"
-    - name: "WSJ Markets"
-      url: "https://feeds.a]]content.wsj.com/public/page/2_0461.xml"
+      url: "https://feeds.bloomberg.com/technology/news.rss"
+    # #3 New York Times (7.54%)
+    - name: "New York Times"
+      url: "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"
+    # #4 Reuters (7.22%)
+    - name: "Reuters"
+      url: "https://www.reuters.com/technology/rss"
+    # #5 Financial Times (6.97%)
+    - name: "Financial Times"
+      url: "https://www.ft.com/technology?format=rss"
+    # #6 Wired (6.49%)
+    - name: "Wired"
+      url: "https://www.wired.com/feed/rss"
+    # #7 The Verge (6.01%)
+    - name: "The Verge"
+      url: "https://www.theverge.com/rss/index.xml"
+    # #8 TechCrunch (3.71%)
+    - name: "TechCrunch"
+      url: "https://techcrunch.com/feed/"
+    # #9 CNBC (3.66%)
     - name: "CNBC"
-      url: "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10001147"
+      url: "https://www.cnbc.com/id/19854910/device/rss/rss.html"
+    # #10 The Information (3.57%)
+    - name: "The Information"
+      url: "https://www.theinformation.com/feed"
+    # #11 Washington Post (2.53%)
+    - name: "Washington Post"
+      url: "https://feeds.washingtonpost.com/rss/business/technology"
+    # #12 404 Media (1.95%)
+    - name: "404 Media"
+      url: "https://www.404media.co/rss/"
+    # #13 The Guardian (1.91%)
+    - name: "The Guardian"
+      url: "https://www.theguardian.com/us/technology/rss"
+    # #14 Ars Technica (1.35%)
+    - name: "Ars Technica"
+      url: "http://feeds.arstechnica.com/arstechnica/index/"
+    # #15 Axios (1.28%)
+    - name: "Axios"
+      url: "https://api.axios.com/feed/"
+    # #16 BBC (1.28%)
+    - name: "BBC"
+      url: "https://feeds.bbci.co.uk/news/technology/rss.xml"
+    # #17 BleepingComputer (1.09%)
+    - name: "BleepingComputer"
+      url: "https://www.bleepingcomputer.com/feed/"
+    # #19 Simon Willison (0.93%)
+    - name: "Simon Willison"
+      url: "https://simonwillison.net/atom/everything/"
+    # #20 Android Authority (0.85%)
+    - name: "Android Authority"
+      url: "https://www.androidauthority.com/feed/"
+    # #21 Forbes (0.74%)
+    - name: "Forbes"
+      url: "https://www.forbes.com/news/index.xml"
+    # #22 9to5Google (0.70%)
+    - name: "9to5Google"
+      url: "https://9to5google.com/feed/"
+    # #23 Fortune (0.57%)
+    - name: "Fortune"
+      url: "https://fortune.com/feed/fortune-feeds/?id=3689511"
+    # #24 MIT Technology Review (0.54%)
+    - name: "MIT Technology Review"
+      url: "https://www.technologyreview.com/feed/"
+    # #25 NBC News (0.54%)
+    - name: "NBC News"
+      url: "https://feeds.nbcnews.com/nbcnews/public/tech"
+    # #26 The Record (0.50%)
+    - name: "The Record"
+      url: "https://therecord.media/feed/"
+    # #28 MacRumors (0.45%)
+    - name: "MacRumors"
+      url: "https://feeds.macrumors.com/MacRumors-All"
+    # #29 Windows Central (0.36%)
+    - name: "Windows Central"
+      url: "https://www.windowscentral.com/feeds.xml"
+    # #30 iFixit (0.36%)
+    - name: "iFixit"
+      url: "https://www.ifixit.com/News/rss"
+    # #34 The Register (0.32%)
+    - name: "The Register"
+      url: "https://www.theregister.com/headlines.atom"
+    # #35 Business Insider (0.31%)
+    - name: "Business Insider"
+      url: "https://www.businessinsider.com/rss"
+    # #37 The Atlantic (0.30%)
+    - name: "The Atlantic"
+      url: "https://feeds.feedburner.com/AtlanticScienceAndTechnology"
+    # #38 Tom's Hardware (0.29%)
+    - name: "Tom's Hardware"
+      url: "https://www.tomshardware.com/feeds.xml"
+    # #39 Sources (0.29%)
+    - name: "Sources"
+      url: "https://sources.news/feed"
+    # #40 Semafor (0.27%)
+    - name: "Semafor"
+      url: "https://www.semafor.com/rss.xml"
+    # #42 Crazy Stupid Tech (0.26%)
+    - name: "Crazy Stupid Tech"
+      url: "https://crazystupidtech.com/feed/"
+    # #44 Nature (0.23%)
+    - name: "Nature"
+      url: "https://www.nature.com/nature.rss"
+    # #50 Krebs on Security (0.20%)
+    - name: "Krebs on Security"
+      url: "https://krebsonsecurity.com/feed/"
+
+  markets:
+    # #2 Wall Street Journal (8.48%) — no direct tech RSS, use markets
+    - name: "Wall Street Journal"
+      url: "https://news.google.com/rss/search?q=site:wsj.com+markets&hl=en-US&gl=US&ceid=US:en"
+    # #27 Fox Business (0.49%)
+    - name: "Fox Business"
+      url: "https://www.foxbusiness.com/rss.xml?category=markets"
+    # Crypto
     - name: "CoinDesk"
       url: "https://www.coindesk.com/arc/outboundfeeds/rss/"
     - name: "Bitcoin Magazine"
@@ -15,32 +130,31 @@ feeds:
     - name: "The Block"
       url: "https://www.theblock.co/rss.xml"
 
-  tech:
-    - name: "TechCrunch"
-      url: "https://techcrunch.com/feed/"
-    - name: "Ars Technica"
-      url: "https://feeds.arstechnica.com/arstechnica/index"
-    - name: "The Verge"
-      url: "https://www.theverge.com/rss/index.xml"
-    - name: "Wired"
-      url: "https://www.wired.com/feed/rss"
-
   politics:
-    - name: "Reuters Politics"
-      url: "https://feeds.reuters.com/Reuters/PoliticsNews"
-    - name: "AP Politics"
-      url: "https://rsshub.app/apnews/topics/politics"
+    # #18 Politico (1.07%)
     - name: "Politico"
-      url: "https://rss.politico.com/politics-news.xml"
+      url: "https://www.politico.com/rss/politicopicks.xml"
+    # #46 ProPublica (0.23%)
+    - name: "ProPublica"
+      url: "https://www.propublica.org/feeds/propublica/main"
+    # #49 The Hill (0.20%)
     - name: "The Hill"
-      url: "https://thehill.com/feed/"
+      url: "https://thehill.com/policy/technology/feed/"
+    # #41 Pew Research (0.26%)
+    - name: "Pew Research"
+      url: "https://www.pewresearch.org/topic/internet-technology/feed/"
+    # #48 Nextgov/FCW (0.20%)
+    - name: "Nextgov"
+      url: "https://www.nextgov.com/rss/all/"
 
   world:
+    # #47 South China Morning Post (0.21%)
+    - name: "South China Morning Post"
+      url: "https://www.scmp.com/rss/36/feed/"
+    # #32 Nikkei Asia (0.33%)
+    - name: "Nikkei Asia"
+      url: "https://asia.nikkei.com/rss"
     - name: "BBC World"
       url: "https://feeds.bbci.co.uk/news/world/rss.xml"
-    - name: "Reuters World"
-      url: "https://feeds.reuters.com/Reuters/worldNews"
-    - name: "AP Top News"
-      url: "https://rsshub.app/apnews/topics/apf-topnews"
     - name: "Al Jazeera"
       url: "https://www.aljazeera.com/xml/rss/all.xml"
