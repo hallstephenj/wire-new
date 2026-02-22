@@ -43,6 +43,22 @@ _SOURCE_QUALITY_CASE = """(CASE
     ELSE 0.4
 END)"""
 
+# Sources considered "medium repute" or better (tier 1.0+) for breadth filtering.
+# A cluster needs >= 3 of these to qualify for hot ranking.
+_REPUTABLE_SOURCES_SQL = """('Reuters','AP',
+    'New York Times','Wall Street Journal','Washington Post',
+    'BBC','Bloomberg','Financial Times','The Guardian','CNN','NBC News','NPR','Al Jazeera',
+    'Ars Technica','ProPublica','MIT Technology Review','Nature',
+    'Politico','Wired','404 Media','The Atlantic','The Record',
+    'TechCrunch','The Verge','Axios','CNBC','Fortune','Forbes',
+    'Fox Business','Business Insider','The Hill','Semafor','South China Morning Post',
+    'Nikkei Asia','MacRumors','CoinDesk','The Register',
+    '9to5Google','Android Authority','Fox News','USA Today',
+    'MarketWatch','Yahoo Finance','Seeking Alpha','Motley Fool','Sky News','Barron''s',
+    'ABC News','CBS News','The Information','Engadget','TechRadar','ZDNet',
+    'PCMag','Tom''s Hardware','Phy.org','Space.com','France24',
+    'Euronews','The Economist','Foreign Policy','Defense One')"""
+
 boot_state = {
     "phase": "reference_check",   # reference_check → polling → clustering → rewriting → ready
     "detail": "",
@@ -274,8 +290,9 @@ async def get_stories(
         / POWER(1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 4.0, 1.3)
     )"""
     if sort == "hot":
-        # Require meaningful breadth for hot ranking
-        where.append("sc.source_count >= 3")
+        # Require at least 3 sources of medium repute or better
+        where.append(f"""(SELECT COUNT(DISTINCT cs2.source_name) FROM cluster_sources cs2
+            WHERE cs2.cluster_id = sc.id AND cs2.source_name IN {_REPUTABLE_SOURCES_SQL}) >= 3""")
         order = f"{sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC"
     else:
         order = f"{sort_prefix}, sc.published_at DESC"
@@ -813,7 +830,8 @@ async def river_stories(
         / POWER(1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 4.0, 1.3)
     )"""
     if sort == "hot":
-        where.append("sc.source_count >= 3")
+        where.append(f"""(SELECT COUNT(DISTINCT cs2.source_name) FROM cluster_sources cs2
+            WHERE cs2.cluster_id = sc.id AND cs2.source_name IN {_REPUTABLE_SOURCES_SQL}) >= 3""")
         order = f"{sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC"
     else:
         order = f"{sort_prefix}, sc.published_at DESC"

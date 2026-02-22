@@ -55,6 +55,7 @@ def init_db():
         added_at TEXT,
         PRIMARY KEY (cluster_id, source_url)
     );
+    CREATE INDEX IF NOT EXISTS idx_csources_cluster_name ON cluster_sources(cluster_id, source_name);
     CREATE INDEX IF NOT EXISTS idx_clusters_category ON story_clusters(category);
     CREATE INDEX IF NOT EXISTS idx_clusters_expires ON story_clusters(expires_at);
     CREATE INDEX IF NOT EXISTS idx_clusters_source_count ON story_clusters(source_count DESC);
