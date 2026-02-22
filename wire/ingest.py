@@ -11,6 +11,7 @@ from wire.db import get_conn
 from wire.config import load_feeds, load_config
 from wire.cluster import assign_cluster
 from wire.events import push as ev
+from wire.rewrite import urgent_rewrite
 
 log = logging.getLogger("wire.ingest")
 
@@ -202,6 +203,12 @@ async def poll_feeds(on_progress=None):
             on_progress(idx + 1, len(all_feeds))
     ev("ingest_done", job="rss", items=count)
     log.info(f"Ingested {count} new items")
+    # Immediately rewrite any high-coverage clusters that need it
+    if count > 0:
+        try:
+            await urgent_rewrite()
+        except Exception as e:
+            log.warning(f"Urgent rewrite after poll failed: {e}")
 
 async def _poll_single_feed(url: str, name: str, category: str) -> int:
     async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
@@ -289,6 +296,11 @@ async def search_sweep(on_progress=None):
             on_progress(idx + 1, len(queries))
     ev("ingest_done", job="search", items=count)
     log.info(f"Search sweep ingested {count} new items")
+    if count > 0:
+        try:
+            await urgent_rewrite()
+        except Exception as e:
+            log.warning(f"Urgent rewrite after search failed: {e}")
 
 def _query_to_category(query: str) -> str:
     q = query.lower()

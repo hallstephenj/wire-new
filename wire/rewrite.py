@@ -69,6 +69,7 @@ async def rewrite_pending():
             WHERE ri.cluster_id = sc.id
             AND ri.original_headline = sc.rewritten_headline
         )
+        ORDER BY sc.source_count DESC, sc.last_updated DESC
         LIMIT ?
     """, (now, cfg["ai"]["batch_size"])).fetchall()
 
@@ -155,5 +156,120 @@ async def rewrite_pending():
     except Exception as e:
         ev("error", source="rewrite", message=str(e))
         log.error(f"Rewrite error: {e}")
+    finally:
+        conn.close()
+
+
+URGENT_REWRITE_THRESHOLD = 5  # source_count at which we trigger immediate rewrite
+
+
+async def urgent_rewrite():
+    """Immediately rewrite any high-coverage clusters that haven't been rewritten yet.
+
+    Called after each poll cycle to ensure breaking stories with many sources
+    don't wait for the next scheduled rewrite pass.
+    """
+    cfg = load_config()
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return
+
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+
+    rows = conn.execute("""
+        SELECT sc.id, sc.rewritten_headline, sc.source_count
+        FROM story_clusters sc
+        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+        WHERE sc.expires_at > ?
+        AND sc.source_count >= ?
+        AND (co.locked IS NULL OR co.locked = 0)
+        AND EXISTS (
+            SELECT 1 FROM raw_items ri
+            WHERE ri.cluster_id = sc.id
+            AND ri.original_headline = sc.rewritten_headline
+        )
+        ORDER BY sc.source_count DESC
+        LIMIT 3
+    """, (now, URGENT_REWRITE_THRESHOLD)).fetchall()
+
+    if not rows:
+        conn.close()
+        return
+
+    log.info(f"Urgent rewrite: {len(rows)} high-coverage clusters need rewriting")
+
+    clusters = []
+    for r in rows:
+        items = conn.execute(
+            "SELECT original_headline, source_name FROM raw_items WHERE cluster_id=? ORDER BY published_at ASC",
+            (r["id"],)
+        ).fetchall()
+        if items:
+            clusters.append({
+                "id": r["id"],
+                "current_headline": r["rewritten_headline"],
+                "headlines": [(i["original_headline"], i["source_name"]) for i in items],
+            })
+
+    if not clusters:
+        conn.close()
+        return
+
+    parts = []
+    for i, c in enumerate(clusters):
+        headline_lines = "\n".join(f"  - [{src}] {hl}" for hl, src in c["headlines"])
+        parts.append(f"{i+1}. Cluster headlines:\n{headline_lines}")
+    numbered = "\n\n".join(parts)
+
+    try:
+        client = anthropic.Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model=cfg["ai"]["model"],
+            max_tokens=4000,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": numbered}]
+        )
+        text = resp.content[0].text.strip()
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+
+        rewrites = 0
+        line_idx = 0
+
+        for i, cluster in enumerate(clusters):
+            if line_idx >= len(lines):
+                break
+
+            line = lines[line_idx]
+            line_idx += 1
+
+            for prefix in [f"{i+1}.", f"{i+1})"]:
+                if line.startswith(prefix):
+                    line = line[len(prefix):].strip()
+
+            category = None
+            rewritten = line
+            if "|" in line:
+                parts = line.split("|", 1)
+                cat_candidate = parts[0].strip().lower()
+                if cat_candidate in VALID_CATEGORIES:
+                    category = cat_candidate
+                    rewritten = parts[1].strip()
+
+            if rewritten and len(rewritten) <= 120:
+                ev("rewrite", before=cluster["current_headline"], after=rewritten, category=category or "unchanged")
+                conn.execute("UPDATE story_clusters SET rewritten_headline=? WHERE id=?",
+                           (rewritten, cluster["id"]))
+                rewrites += 1
+
+            if category:
+                conn.execute("UPDATE story_clusters SET category=? WHERE id=?",
+                           (category, cluster["id"]))
+
+        conn.commit()
+        log.info(f"Urgent rewrite done: {rewrites} headlines")
+    except Exception as e:
+        ev("error", source="urgent_rewrite", message=str(e))
+        log.error(f"Urgent rewrite error: {e}")
     finally:
         conn.close()

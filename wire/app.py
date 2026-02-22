@@ -224,12 +224,13 @@ async def get_stories(
                           ELSE 3 END"""
     # Deprioritize "world" in the ALL view
     world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if category == "all" else "0+0"
-    # Hot score: unique headline count / time decay
-    # Balances coverage vs freshness — syndication is discounted (unique not total),
-    # and older stories fade unless they have massive coverage
+    # Hot score: coverage velocity with steeper time decay
+    # Stories that accumulate many sources quickly rank highest.
+    # POWER decay (exponent 1.3) ensures older stories fade faster,
+    # so a 1hr-old story with 16 sources beats a 12hr-old story with 20.
     hot_score = """(
         (SELECT COUNT(DISTINCT ri3.original_headline) FROM raw_items ri3 WHERE ri3.cluster_id = sc.id) * 1.0
-        / (1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 6.0)
+        / POWER(1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 4.0, 1.3)
     )"""
     if sort == "hot":
         # Only show multi-source clusters
@@ -746,7 +747,7 @@ async def river_stories(
     world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if category == "all" else "0+0"
     hot_score = """(
         (SELECT COUNT(DISTINCT ri3.original_headline) FROM raw_items ri3 WHERE ri3.cluster_id = sc.id) * 1.0
-        / (1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 6.0)
+        / POWER(1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 4.0, 1.3)
     )"""
     if sort == "hot":
         where.append("sc.source_count >= 2")
