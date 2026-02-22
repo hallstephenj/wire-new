@@ -17,6 +17,7 @@ from wire.rewrite import rewrite_pending
 from wire.cluster import assign_cluster
 from wire.events import snapshot as events_snapshot
 from wire.scores import all_scores
+from wire.reference import run_reference_check
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("wire")
@@ -24,11 +25,12 @@ log = logging.getLogger("wire")
 scheduler = AsyncIOScheduler()
 
 boot_state = {
-    "phase": "polling",   # polling → clustering → rewriting → ready
+    "phase": "reference_check",   # reference_check → polling → clustering → rewriting → ready
     "detail": "",
     "clusters": 0,
     "pending": 0,
     # Per-phase progress (0.0 – 1.0)
+    "reference_progress": 0,
     "polling_progress": 0,
     "clustering_progress": 0,
     "rewriting_progress": 0,
@@ -46,12 +48,27 @@ async def startup_backfill():
         log.info(f"Startup: {cluster_count} clusters found, skipping backfill")
         boot_state["phase"] = "ready"
         boot_state["clusters"] = cluster_count
+        boot_state["reference_progress"] = 1
         boot_state["polling_progress"] = 1
         boot_state["clustering_progress"] = 1
         boot_state["rewriting_progress"] = 1
         return
 
     log.info(f"Startup: only {cluster_count} clusters, running backfill...")
+
+    # Phase 0: reference check — scrape editorial front pages
+    boot_state["phase"] = "reference_check"
+    boot_state["detail"] = ""
+    log.info("Boot phase 0 — reference check")
+
+    def ref_progress(done, total):
+        boot_state["reference_progress"] = done / total
+
+    try:
+        await run_reference_check(on_progress=ref_progress)
+    except Exception as e:
+        log.warning(f"Boot reference check error: {e}")
+    boot_state["reference_progress"] = 1
 
     # Phase 1: polling — 3 passes of (poll_feeds + search_sweep)
     # Progress is tracked per-feed across all 3 passes
@@ -156,6 +173,7 @@ async def _start_scheduler_after_boot():
     scheduler.add_job(search_sweep, "interval", minutes=cfg["polling"]["search_interval_minutes"], id="search", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(rewrite_pending, "interval", minutes=2, id="rewrite", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(cleanup_expired, "interval", hours=cfg["polling"]["cleanup_interval_hours"], id="cleanup")
+    scheduler.add_job(run_reference_check, "cron", hour=6, id="reference_check")
     if not scheduler.running:
         scheduler.start()
     log.info("Scheduler started (post-boot)")
@@ -322,10 +340,13 @@ async def river_status():
     active_filters = conn.execute("SELECT COUNT(*) as c FROM content_filters WHERE enabled = 1").fetchone()["c"]
     cutoff_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     filtered_24h = conn.execute("SELECT COUNT(*) as c FROM filtered_items WHERE filtered_at > ?", (cutoff_24h,)).fetchone()["c"]
+    reference_sites_count = conn.execute("SELECT COUNT(*) as c FROM reference_sites WHERE enabled = 1").fetchone()["c"]
+    last_ref_check = conn.execute("SELECT MAX(last_checked) as lc FROM reference_sites").fetchone()["lc"]
+    reference_gaps_24h = conn.execute("SELECT COUNT(*) as c FROM reference_check_log WHERE status IN ('gap_filled','gap_unfilled') AND checked_at > ?", (cutoff_24h,)).fetchone()["c"]
     conn.close()
 
     jobs = {}
-    for job_id in ("rss", "search", "rewrite", "cleanup"):
+    for job_id in ("rss", "search", "rewrite", "cleanup", "reference_check"):
         job = scheduler.get_job(job_id)
         if job:
             nrt = job.next_run_time
@@ -339,7 +360,9 @@ async def river_status():
     return {
         "jobs": jobs,
         "db": {"clusters": clusters, "raw_items": raw_items, "pending_rewrites": pending,
-               "active_filters": active_filters, "filtered_24h": filtered_24h},
+               "active_filters": active_filters, "filtered_24h": filtered_24h,
+               "reference_sites": reference_sites_count, "last_reference_check": last_ref_check,
+               "reference_gaps_24h": reference_gaps_24h},
         "config": {
             "similarity_threshold": cfg["clustering"]["similarity_threshold"],
             "lookback_hours": cfg["clustering"]["lookback_hours"],
@@ -1133,6 +1156,120 @@ async def get_filtered_items(
     return {"items": [dict(r) for r in rows], "total": total}
 
 
+# ── Reference Site CRUD + Check ───────────────────────────────────────
+
+@app.get("/api/river/references")
+async def list_references():
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM reference_sites ORDER BY id").fetchall()
+    conn.close()
+    return {"sites": [dict(r) for r in rows]}
+
+
+@app.post("/api/river/references")
+async def create_reference(request: Request):
+    body = await request.json()
+    name = body.get("name", "").strip()
+    url = body.get("url", "").strip()
+    parser = body.get("parser", "").strip()
+    max_headlines = int(body.get("max_headlines", 20))
+
+    if not name or not url or not parser:
+        return JSONResponse({"error": "name, url, and parser required"}, status_code=400)
+
+    valid_parsers = {"techmeme", "drudge", "apnews", "googlenews"}
+    if parser not in valid_parsers:
+        return JSONResponse({"error": f"parser must be one of: {', '.join(sorted(valid_parsers))}"}, status_code=400)
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_conn()
+    cur = conn.execute(
+        "INSERT INTO reference_sites (name, url, parser, enabled, max_headlines, created_at, updated_at) VALUES (?,?,?,1,?,?,?)",
+        (name, url, parser, max_headlines, now, now)
+    )
+    site_id = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "id": site_id}
+
+
+@app.put("/api/river/references/{site_id}")
+async def update_reference(site_id: int, request: Request):
+    body = await request.json()
+    conn = get_conn()
+    existing = conn.execute("SELECT * FROM reference_sites WHERE id=?", (site_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return JSONResponse({"error": "site not found"}, status_code=404)
+
+    name = body.get("name", existing["name"])
+    url = body.get("url", existing["url"])
+    parser = body.get("parser", existing["parser"])
+    enabled = body.get("enabled", existing["enabled"])
+    max_headlines = body.get("max_headlines", existing["max_headlines"])
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "UPDATE reference_sites SET name=?, url=?, parser=?, enabled=?, max_headlines=?, updated_at=? WHERE id=?",
+        (name, url, parser, int(enabled), int(max_headlines), now, site_id)
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+
+@app.delete("/api/river/references/{site_id}")
+async def delete_reference(site_id: int):
+    conn = get_conn()
+    existing = conn.execute("SELECT * FROM reference_sites WHERE id=?", (site_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return JSONResponse({"error": "site not found"}, status_code=404)
+    conn.execute("DELETE FROM reference_sites WHERE id=?", (site_id,))
+    conn.execute("DELETE FROM reference_check_log WHERE site_id=?", (site_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+
+_reference_check_running = False
+
+@app.post("/api/river/references/check")
+async def trigger_reference_check():
+    global _reference_check_running
+    if _reference_check_running:
+        return JSONResponse({"status": "already_running"}, status_code=409)
+    _reference_check_running = True
+
+    try:
+        result = await run_reference_check()
+    finally:
+        _reference_check_running = False
+    return {"status": "ok", **result}
+
+
+@app.get("/api/river/references/log")
+async def reference_check_log(
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    site_id: int | None = None,
+):
+    conn = get_conn()
+    where = []
+    params = []
+    if site_id is not None:
+        where.append("site_id = ?")
+        params.append(site_id)
+    where_clause = (" WHERE " + " AND ".join(where)) if where else ""
+    rows = conn.execute(
+        f"SELECT * FROM reference_check_log{where_clause} ORDER BY checked_at DESC LIMIT ? OFFSET ?",
+        (*params, limit, offset)
+    ).fetchall()
+    total = conn.execute(f"SELECT COUNT(*) as c FROM reference_check_log{where_clause}", params).fetchone()["c"]
+    conn.close()
+    return {"entries": [dict(r) for r in rows], "total": total}
+
+
 _backfill_running = False
 
 @app.post("/api/river/backfill")
@@ -1161,7 +1298,7 @@ async def river_reboot():
         return JSONResponse({"status": "already_booting"}, status_code=409)
 
     # Stop scheduler jobs
-    for job_id in ("rss", "search", "rewrite", "cleanup"):
+    for job_id in ("rss", "search", "rewrite", "cleanup", "reference_check"):
         job = scheduler.get_job(job_id)
         if job:
             job.remove()
@@ -1177,15 +1314,18 @@ async def river_reboot():
     conn.execute("DELETE FROM raw_items")
     conn.execute("DELETE FROM story_clusters")
     conn.execute("DELETE FROM filtered_items")
+    conn.execute("DELETE FROM reference_check_log")
+    conn.execute("UPDATE reference_sites SET last_checked=NULL, last_found=0, last_gaps=0")
     conn.commit()
     conn.close()
-    log.info("Reboot: database wiped (filters preserved)")
+    log.info("Reboot: database wiped (filters and reference sites preserved)")
 
     # Reset boot state
-    boot_state["phase"] = "polling"
+    boot_state["phase"] = "reference_check"
     boot_state["detail"] = ""
     boot_state["clusters"] = 0
     boot_state["pending"] = 0
+    boot_state["reference_progress"] = 0
     boot_state["polling_progress"] = 0
     boot_state["clustering_progress"] = 0
     boot_state["rewriting_progress"] = 0
@@ -1207,6 +1347,7 @@ async def cleanup_expired():
     # Clean up filtered_items older than 7 days
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     conn.execute("DELETE FROM filtered_items WHERE filtered_at < ?", (cutoff,))
+    conn.execute("DELETE FROM reference_check_log WHERE checked_at < ?", (cutoff,))
     conn.commit()
     conn.close()
-    log.info("Cleaned up expired stories and old filtered items")
+    log.info("Cleaned up expired stories, old filtered items, and old reference logs")

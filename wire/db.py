@@ -107,6 +107,34 @@ def init_db():
     );
     CREATE INDEX IF NOT EXISTS idx_filtered_items_at ON filtered_items(filtered_at DESC);
     CREATE INDEX IF NOT EXISTS idx_filtered_items_filter ON filtered_items(filter_id);
+
+    CREATE TABLE IF NOT EXISTS reference_sites (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL,
+        parser TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        max_headlines INTEGER DEFAULT 20,
+        last_checked TEXT,
+        last_found INTEGER DEFAULT 0,
+        last_gaps INTEGER DEFAULT 0,
+        created_at TEXT,
+        updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS reference_check_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        site_id INTEGER,
+        site_name TEXT,
+        headline TEXT,
+        source_url TEXT,
+        status TEXT,
+        matched_cluster_id TEXT,
+        detail TEXT,
+        checked_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_ref_log_checked ON reference_check_log(checked_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_ref_log_site ON reference_check_log(site_id);
     """)
     # Migration: add published_at to story_clusters if missing
     cols = [r[1] for r in conn.execute("PRAGMA table_info(story_clusters)").fetchall()]
@@ -162,6 +190,22 @@ def init_db():
             conn.execute(
                 "INSERT INTO content_filters (name, filter_type, pattern, enabled, created_at, updated_at) VALUES (?, 'not_news', ?, 1, ?, ?)",
                 (name, pattern, now, now)
+            )
+
+    # Seed reference_sites if empty
+    ref_count = conn.execute("SELECT COUNT(*) as c FROM reference_sites").fetchone()["c"]
+    if ref_count == 0:
+        now = datetime.now(timezone.utc).isoformat()
+        seed_refs = [
+            ("Techmeme", "https://techmeme.com", "techmeme", 20),
+            ("Drudge Report", "https://drudgereport.com", "drudge", 30),
+            ("AP News", "https://apnews.com", "apnews", 20),
+            ("Google News", "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en", "googlenews", 20),
+        ]
+        for name, url, parser, max_hl in seed_refs:
+            conn.execute(
+                "INSERT INTO reference_sites (name, url, parser, enabled, max_headlines, created_at, updated_at) VALUES (?,?,?,1,?,?,?)",
+                (name, url, parser, max_hl, now, now)
             )
 
     conn.commit()

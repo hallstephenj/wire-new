@@ -708,6 +708,135 @@ a:hover { text-decoration: underline; }
 .filter-search-input:focus { border-color: #ffb000; outline: none; }
 
 /* ══════════════════════════════════════════════════════════════════
+   TAB 3: REFERENCES
+   ══════════════════════════════════════════════════════════════════ */
+.references-layout {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+    overflow: hidden;
+}
+
+.references-sites-pane, .references-log-pane {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.references-sites-pane {
+    border-right: 1px solid #1a1a1a;
+}
+
+.ref-site-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+    border-bottom: 1px solid #111;
+    font-size: 10px;
+}
+
+.ref-site-row.disabled { opacity: 0.4; }
+
+.ref-site-name { color: #ccc; font-weight: 700; min-width: 100px; }
+.ref-site-url { flex: 1; color: #555; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+
+.ref-site-stats {
+    color: #888;
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+.ref-site-stats .gaps { color: #e04040; }
+.ref-site-stats .found { color: #4a9e4a; }
+
+.ref-site-toggle {
+    padding: 2px 6px;
+    cursor: pointer;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.ref-site-toggle.on { color: #4a9e4a; border-color: #2a5a2a; }
+.ref-site-toggle.off { color: #e04040; border-color: #6e2a2a; }
+
+.ref-site-del {
+    padding: 2px 5px;
+    cursor: pointer;
+    color: #555;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 8px;
+}
+
+.ref-site-del:hover { color: #e04040; border-color: #e04040; }
+
+.ref-add-form {
+    padding: 8px 0;
+    border-top: 1px solid #1a1a1a;
+    margin-top: 6px;
+}
+
+.ref-add-form input, .ref-add-form select {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 10px;
+    padding: 3px 6px;
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.ref-add-buttons {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.ref-check-bar {
+    padding: 8px 0;
+    border-top: 1px solid #1a1a1a;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ref-check-status {
+    color: #888;
+    font-size: 9px;
+}
+
+.ref-log-entry {
+    padding: 5px 0;
+    border-bottom: 1px solid #111;
+    font-size: 10px;
+}
+
+.ref-log-headline { color: #ccc; word-break: break-word; }
+.ref-log-meta { color: #555; font-size: 9px; margin-top: 2px; }
+
+.ref-log-status {
+    display: inline-block;
+    font-size: 8px;
+    padding: 1px 4px;
+    letter-spacing: 1px;
+    font-weight: 700;
+    border: 1px solid;
+}
+
+.ref-log-status.matched { color: #4a9e4a; border-color: #2a5a2a; }
+.ref-log-status.gap_filled { color: #ffb000; border-color: #665500; }
+.ref-log-status.gap_unfilled { color: #e04040; border-color: #6e2a2a; }
+.ref-log-status.error { color: #e04040; border-color: #6e2a2a; }
+
+/* ══════════════════════════════════════════════════════════════════
    TAB 3: SYSTEM
    ══════════════════════════════════════════════════════════════════ */
 .system-layout {
@@ -884,6 +1013,7 @@ a:hover { text-decoration: underline; }
 <div class="primary-tabs" id="primary-tabs">
     <button class="primary-tab active" data-tab="stories">STORIES</button>
     <button class="primary-tab" data-tab="filters">FILTERS <span class="tab-badge" id="tab-badge-filters"></span></button>
+    <button class="primary-tab" data-tab="references">REFERENCES <span class="tab-badge" id="tab-badge-references"></span></button>
     <button class="primary-tab" data-tab="system">SYSTEM <span class="tab-badge" id="tab-badge-system"></span></button>
 </div>
 
@@ -959,7 +1089,48 @@ a:hover { text-decoration: underline; }
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════
-     TAB 3: SYSTEM
+     TAB 3: REFERENCES
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-references">
+    <div class="references-layout">
+        <!-- Left: Sites -->
+        <div class="references-sites-pane">
+            <div class="panel-header">REFERENCE SITES</div>
+            <div class="panel-body">
+                <div id="ref-sites-list"></div>
+                <div class="ref-add-form">
+                    <input type="text" id="ref-add-name" placeholder="Site name...">
+                    <input type="text" id="ref-add-url" placeholder="URL...">
+                    <select id="ref-add-parser">
+                        <option value="techmeme">techmeme</option>
+                        <option value="drudge">drudge</option>
+                        <option value="apnews">apnews</option>
+                        <option value="googlenews">googlenews</option>
+                    </select>
+                    <input type="number" id="ref-add-max" placeholder="Max headlines" value="20" min="1" max="100">
+                    <div class="ref-add-buttons">
+                        <button class="action-btn" onclick="addRefSite()" style="font-size:9px;padding:3px 8px;">ADD SITE</button>
+                    </div>
+                </div>
+                <div class="ref-check-bar">
+                    <button class="action-btn" id="ref-check-btn" onclick="runRefCheck()" style="font-size:9px;padding:3px 8px;">RUN CHECK NOW</button>
+                    <span class="ref-check-status" id="ref-check-status"></span>
+                </div>
+            </div>
+        </div>
+        <!-- Right: Check Log -->
+        <div class="references-log-pane">
+            <div class="panel-header">CHECK LOG</div>
+            <div class="panel-body">
+                <div id="ref-log-list"></div>
+            </div>
+            <div class="pagination" id="ref-log-pagination"></div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     TAB 4: SYSTEM
      ══════════════════════════════════════════════════════════════════ -->
 <div class="tab-content" id="tab-system">
     <div class="system-layout">
@@ -988,6 +1159,11 @@ a:hover { text-decoration: underline; }
                         <div class="job-field">next: <span id="cleanup-next">--</span></div>
                         <div class="job-countdown" id="cleanup-countdown">--:--</div>
                     </div>
+                    <div class="job-card" id="job-reference_check">
+                        <div class="job-name">REF CHECK</div>
+                        <div class="job-field">next: <span id="reference_check-next">--</span></div>
+                        <div class="job-countdown" id="reference_check-countdown">--:--</div>
+                    </div>
                     <div class="job-card" style="cursor:pointer;border-color:#ffb000;" onclick="doRecluster()">
                         <div class="job-name" style="color:#ffb000;">RECLUSTER</div>
                         <div class="job-field" id="recluster-status">click to rebuild</div>
@@ -1002,6 +1178,9 @@ a:hover { text-decoration: underline; }
                     <div class="stat-row"><span class="stat-label">pending rewrites</span><span class="stat-value amber" id="stat-pending">--</span></div>
                     <div class="stat-row"><span class="stat-label">active filters</span><span class="stat-value" id="stat-filters">--</span></div>
                     <div class="stat-row"><span class="stat-label">filtered (24h)</span><span class="stat-value amber" id="stat-filtered-24h">--</span></div>
+                    <div class="stat-row"><span class="stat-label">ref sites</span><span class="stat-value" id="stat-ref-sites">--</span></div>
+                    <div class="stat-row"><span class="stat-label">ref gaps (24h)</span><span class="stat-value amber" id="stat-ref-gaps">--</span></div>
+                    <div class="stat-row"><span class="stat-label">last ref check</span><span class="stat-value" id="stat-last-ref" style="font-size:9px;">--</span></div>
                 </div>
             </div>
         </div>
@@ -1091,6 +1270,9 @@ document.querySelectorAll('#primary-tabs .primary-tab').forEach(btn => {
         if (activeTab === 'filters') {
             fetchFilters();
             fetchFilteredItems();
+        } else if (activeTab === 'references') {
+            fetchRefSites();
+            fetchRefLog();
         } else if (activeTab === 'system') {
             fetchEvents();
         }
@@ -1577,11 +1759,12 @@ async function fetchStatus() {
         const resp = await fetch('/api/river/status');
         const data = await resp.json();
 
-        for (const id of ['rss', 'search', 'rewrite', 'cleanup']) {
+        for (const id of ['rss', 'search', 'rewrite', 'cleanup', 'reference_check']) {
             const job = data.jobs[id];
             if (job) {
                 jobNextRuns[id] = job.next_run;
-                document.getElementById(`${id}-next`).textContent = fmtTime(job.next_run);
+                const nextEl = document.getElementById(`${id}-next`);
+                if (nextEl) nextEl.textContent = fmtTime(job.next_run);
             }
         }
 
@@ -1590,6 +1773,12 @@ async function fetchStatus() {
         document.getElementById('stat-pending').textContent = data.db.pending_rewrites;
         document.getElementById('stat-filters').textContent = data.db.active_filters;
         document.getElementById('stat-filtered-24h').textContent = data.db.filtered_24h;
+        document.getElementById('stat-ref-sites').textContent = data.db.reference_sites != null ? data.db.reference_sites : '--';
+        document.getElementById('stat-ref-gaps').textContent = data.db.reference_gaps_24h != null ? data.db.reference_gaps_24h : '--';
+        document.getElementById('stat-last-ref').textContent = data.db.last_reference_check ? timeAgo(data.db.last_reference_check) : 'never';
+
+        // Update references tab badge
+        document.getElementById('tab-badge-references').textContent = data.db.reference_sites != null ? `(${data.db.reference_sites})` : '';
 
         // Update tab badges
         document.getElementById('tab-badge-filters').textContent = data.db.active_filters != null ? `(${data.db.active_filters})` : '';
@@ -1750,9 +1939,9 @@ document.getElementById('show-hidden').addEventListener('change', () => { storie
 
 // ── Countdown ticker ─────────────────────────────────────────────────
 function updateCountdowns() {
-    for (const id of ['rss', 'search', 'rewrite', 'cleanup']) {
+    for (const id of ['rss', 'search', 'rewrite', 'cleanup', 'reference_check']) {
         const el = document.getElementById(`${id}-countdown`);
-        el.textContent = fmtCountdown(jobNextRuns[id]);
+        if (el) el.textContent = fmtCountdown(jobNextRuns[id]);
     }
 }
 
@@ -1881,6 +2070,139 @@ function debouncedFetchFilteredItems() {
     clearTimeout(_filteredItemsDebounce);
     filteredItemsPage = 0;
     _filteredItemsDebounce = setTimeout(fetchFilteredItems, 300);
+}
+
+// ── References ───────────────────────────────────────────────────────
+let refLogPage = 0;
+const refLogPerPage = 100;
+
+async function fetchRefSites() {
+    try {
+        const resp = await fetch('/api/river/references');
+        const data = await resp.json();
+        renderRefSites(data.sites);
+    } catch (e) {
+        console.error('Ref sites fetch error:', e);
+    }
+}
+
+function renderRefSites(sites) {
+    const container = document.getElementById('ref-sites-list');
+    container.innerHTML = sites.map(s => {
+        const onOff = s.enabled ? 'on' : 'off';
+        const disabledClass = s.enabled ? '' : ' disabled';
+        const stats = s.last_checked
+            ? `<span class="found">${s.last_found} found</span> / <span class="gaps">${s.last_gaps} gaps</span> &middot; ${timeAgo(s.last_checked)}`
+            : 'not checked yet';
+        return `<div class="ref-site-row${disabledClass}">
+            <span class="ref-site-name">${esc(s.name)}</span>
+            <span class="ref-site-url" title="${esc(s.url)}">${esc(s.url)}</span>
+            <span class="ref-site-stats">${stats}</span>
+            <button class="ref-site-toggle ${onOff}" onclick="toggleRefSite(${s.id}, ${s.enabled ? 0 : 1})">${onOff.toUpperCase()}</button>
+            <button class="ref-site-del" onclick="deleteRefSite(${s.id})" title="Delete site">&times;</button>
+        </div>`;
+    }).join('');
+}
+
+async function toggleRefSite(id, enabled) {
+    await fetch(`/api/river/references/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+    });
+    fetchRefSites();
+}
+
+async function deleteRefSite(id) {
+    if (!confirm('Delete this reference site?')) return;
+    await fetch(`/api/river/references/${id}`, { method: 'DELETE' });
+    fetchRefSites();
+    fetchRefLog();
+}
+
+async function addRefSite() {
+    const name = document.getElementById('ref-add-name').value.trim();
+    const url = document.getElementById('ref-add-url').value.trim();
+    const parser = document.getElementById('ref-add-parser').value;
+    const max_headlines = parseInt(document.getElementById('ref-add-max').value) || 20;
+    if (!name || !url) { alert('Name and URL required'); return; }
+
+    const resp = await fetch('/api/river/references', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, url, parser, max_headlines }),
+    });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    document.getElementById('ref-add-name').value = '';
+    document.getElementById('ref-add-url').value = '';
+    document.getElementById('ref-add-max').value = '20';
+    fetchRefSites();
+}
+
+async function runRefCheck() {
+    const btn = document.getElementById('ref-check-btn');
+    const status = document.getElementById('ref-check-status');
+    btn.disabled = true;
+    btn.textContent = 'CHECKING...';
+    status.textContent = '';
+
+    try {
+        const resp = await fetch('/api/river/references/check', { method: 'POST' });
+        const data = await resp.json();
+        if (data.status === 'already_running') {
+            status.textContent = 'Already running...';
+        } else {
+            status.textContent = `${data.headlines_found} found, ${data.gaps_found} gaps, ${data.gaps_filled} filled`;
+        }
+        fetchRefSites();
+        fetchRefLog();
+        fetchStatus();
+    } catch (e) {
+        status.textContent = 'Error: ' + e.message;
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'RUN CHECK NOW';
+    }
+}
+
+async function fetchRefLog() {
+    try {
+        const params = new URLSearchParams({
+            limit: refLogPerPage,
+            offset: refLogPage * refLogPerPage,
+        });
+        const resp = await fetch(`/api/river/references/log?${params}`);
+        const data = await resp.json();
+        renderRefLog(data.entries, data.total);
+    } catch (e) {
+        console.error('Ref log fetch error:', e);
+    }
+}
+
+function renderRefLog(entries, total) {
+    const container = document.getElementById('ref-log-list');
+    container.innerHTML = entries.map(e => {
+        const statusLabel = (e.status || '').replace('_', ' ').toUpperCase();
+        const statusClass = e.status || '';
+        const clusterLink = e.matched_cluster_id ? ` <span style="color:#555;font-size:8px;">[${e.matched_cluster_id.substring(0, 8)}]</span>` : '';
+        const detail = e.detail ? ` <span style="color:#555;">${esc(e.detail)}</span>` : '';
+        return `<div class="ref-log-entry">
+            <span class="ref-log-status ${statusClass}">${statusLabel}</span>
+            <span style="color:#555;font-size:9px;margin-left:4px;">${esc(e.site_name)}</span>
+            <span style="color:#555;font-size:9px;margin-left:4px;">${timeAgo(e.checked_at)}</span>
+            ${clusterLink}
+            <div class="ref-log-headline">${e.headline ? esc(e.headline) : '<em style="color:#555;">Site-level error</em>'}${detail}</div>
+        </div>`;
+    }).join('');
+
+    const totalPages = Math.ceil(total / refLogPerPage);
+    const pag = document.getElementById('ref-log-pagination');
+    pag.innerHTML = `
+        <button ${refLogPage === 0 ? 'disabled' : ''} onclick="refLogPage--; fetchRefLog();">PREV</button>
+        <span>${refLogPage + 1} / ${totalPages || 1} (${total})</span>
+        <button ${refLogPage >= totalPages - 1 ? 'disabled' : ''} onclick="refLogPage++; fetchRefLog();">NEXT</button>
+    `;
 }
 
 // ── Init ─────────────────────────────────────────────────────────────
