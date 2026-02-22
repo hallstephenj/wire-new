@@ -29,6 +29,14 @@ TOPIC_PATTERNS = [
     r'\btariff', r'\bscotus\b', r'\bsupreme court\b', r'\bartemis\b',
     r'\bautopilot\b', r'\bchatgpt\b', r'\bclaude\b', r'\bgemini\b',
     r'\bgrokipedia\b', r'\bwikipedia\b', r'\bransomware\b',
+    # Government agencies
+    r'\btsa\b', r'\bdhs\b', r'\bfbi\b', r'\bdoj\b', r'\bepa\b',
+    r'\bfda\b', r'\bfcc\b', r'\bsec\b', r'\bfaa\b',
+    # Programs
+    r'\bprecheck\b', r'\bglobal entry\b', r'\bmedicare\b', r'\bmedicaid\b',
+    r'\bsocial security\b',
+    # Events
+    r'\bshutdown\b', r'\bceasefire\b', r'\bbrexit\b', r'\bimpeach',
 ]
 
 COMPILED_PATTERNS = [(re.compile(p, re.IGNORECASE), p) for p in TOPIC_PATTERNS]
@@ -55,6 +63,32 @@ def _topic_overlap_score(topics_a: set, topics_b: set) -> float:
     # Jaccard-ish but weighted toward having ANY overlap
     # If they share at least one specific entity, that's a strong signal
     return len(intersection) / min(len(topics_a), len(topics_b))
+
+
+_STOPWORDS = frozenset({
+    # Common English
+    "the", "and", "for", "are", "but", "not", "you", "all", "can", "had",
+    "her", "was", "one", "our", "out", "has", "have", "been", "from", "its",
+    "they", "were", "that", "this", "with", "will", "each", "make", "like",
+    "over", "such", "than", "them", "then", "into", "some", "could", "would",
+    "about", "after", "which", "their", "there", "other", "being", "where",
+    "these", "those", "does", "what", "when", "who", "how", "more", "also",
+    # News boilerplate
+    "says", "said", "report", "reports", "reported", "new", "amid", "just",
+    "may", "could", "would", "should", "will", "now", "get", "gets",
+    "set", "sets", "back", "way", "take", "takes", "why", "still",
+})
+
+
+def _extract_keywords(headline: str) -> set:
+    """Extract significant non-stopword terms from a headline."""
+    words = re.findall(r'[a-z]{3,}', headline.lower())
+    return {w for w in words if w not in _STOPWORDS}
+
+
+def _keyword_overlap_score(kw_a: set, kw_b: set) -> int:
+    """Return count of shared keywords between two sets."""
+    return len(kw_a & kw_b)
 
 
 def assign_cluster(conn, headline: str, url: str, source_name: str, category: str, published_at: str = None) -> str:
@@ -125,6 +159,24 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
             _add_to_cluster(conn, cluster_id, source_name, url, headline, category, published_at=published_at)
             return cluster_id
 
+        # ── Pass 3: Keyword overlap ──────────────────────────────────────
+        # Catches developing story angles that share 3+ rare terms
+        new_keywords = _extract_keywords(headline)
+        if new_keywords and best_tfidf_sim >= 0.10:
+            best_kw_idx = -1
+            best_kw_count = 0
+            for i, ch in enumerate(cluster_headlines):
+                overlap = _keyword_overlap_score(new_keywords, _extract_keywords(ch))
+                if overlap > best_kw_count:
+                    best_kw_count = overlap
+                    best_kw_idx = i
+            if best_kw_count >= 3 and best_kw_idx >= 0:
+                cluster_id = rows[best_kw_idx]["id"]
+                ev("cluster_hit", headline=headline, matched=rows[best_kw_idx]["rewritten_headline"],
+                   similarity=round(best_tfidf_sim, 3), keyword_overlap=best_kw_count, method="keyword+tfidf")
+                _add_to_cluster(conn, cluster_id, source_name, url, headline, category, published_at=published_at)
+                return cluster_id
+
     # New cluster
     ev("cluster_new", headline=headline, source=source_name, category=category)
     cluster_id = str(uuid.uuid4())
@@ -187,6 +239,7 @@ def merge_existing_clusters(conn):
 
     headlines = [r["rewritten_headline"] or "" for r in rows]
     topic_sets = [_extract_topics(h) for h in headlines]
+    keyword_sets = [_extract_keywords(h) for h in headlines]
 
     # Build TF-IDF matrix
     try:
@@ -209,11 +262,13 @@ def merge_existing_clusters(conn):
             # Check TF-IDF
             sim = cosine_similarity(matrix[i:i+1], matrix[j:j+1])[0][0]
             topic_overlap = _topic_overlap_score(topic_sets[i], topic_sets[j])
+            kw_overlap = _keyword_overlap_score(keyword_sets[i], keyword_sets[j])
 
             should_merge = (
                 sim >= 0.35 or
                 (sim >= 0.15 and topic_overlap >= 0.5) or
-                (topic_overlap >= 1.0)
+                (topic_overlap >= 1.0) or
+                (kw_overlap >= 3 and sim >= 0.10)
             )
 
             if should_merge:
