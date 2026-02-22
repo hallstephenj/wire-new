@@ -512,6 +512,14 @@ header {
 <div id="boot-overlay">
     <div class="boot-logo">WIRE</div>
     <div class="boot-steps">
+        <div class="boot-step" id="step-reference_check">
+            <div class="boot-step-header">
+                <span class="boot-icon" id="icon-reference_check">○</span>
+                <span>Checking editorial leaders</span>
+                <span class="boot-detail" id="detail-reference_check"></span>
+            </div>
+            <div class="boot-bar-track"><div class="boot-bar-fill" id="bar-reference_check"></div></div>
+        </div>
         <div class="boot-step" id="step-polling">
             <div class="boot-step-header">
                 <span class="boot-icon" id="icon-polling">○</span>
@@ -577,7 +585,7 @@ let currentOffset = 0;
 let knownIds = new Set();
 
 /* ── Boot overlay logic ───────────────────────────────────────────── */
-const PHASES = ['polling', 'clustering', 'rewriting'];
+const PHASES = ['reference_check', 'polling', 'clustering', 'rewriting'];
 
 function updateBootUI(state) {
     const phaseIdx = PHASES.indexOf(state.phase);
@@ -604,6 +612,16 @@ function updateBootUI(state) {
         }
 
         // Show phase-specific detail with percentage
+        if (p === 'reference_check') {
+            if (i === phaseIdx) {
+                const pct = Math.round((state.reference_progress || 0) * 100);
+                detail.textContent = `${pct}%`;
+            } else if (i < phaseIdx || state.phase === 'ready') {
+                detail.textContent = '100%';
+            } else {
+                detail.textContent = '';
+            }
+        }
         if (p === 'polling') {
             if (i === phaseIdx) {
                 const pct = Math.round((state.polling_progress || 0) * 100);

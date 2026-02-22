@@ -1884,7 +1884,7 @@ async function triggerReboot() {
             try {
                 const r = await fetch('/api/boot-status');
                 const s = await r.json();
-                const pct = Math.round(((s.polling_progress + s.clustering_progress + s.rewriting_progress) / 3) * 100);
+                const pct = Math.round((((s.reference_progress || 0) + s.polling_progress + s.clustering_progress + s.rewriting_progress) / 4) * 100);
                 btn.textContent = `BOOTING ${pct}%`;
                 fetchStatus();
                 if (s.phase === 'ready') {
