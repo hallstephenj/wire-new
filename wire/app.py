@@ -1253,6 +1253,7 @@ async def reference_check_log(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     site_id: int | None = None,
+    status: str | None = None,
 ):
     conn = get_conn()
     where = []
@@ -1260,6 +1261,12 @@ async def reference_check_log(
     if site_id is not None:
         where.append("site_id = ?")
         params.append(site_id)
+    if status is not None:
+        # Support comma-separated statuses like "gap_filled,gap_unfilled"
+        statuses = [s.strip() for s in status.split(",") if s.strip()]
+        placeholders = ",".join("?" for _ in statuses)
+        where.append(f"status IN ({placeholders})")
+        params.extend(statuses)
     where_clause = (" WHERE " + " AND ".join(where)) if where else ""
     rows = conn.execute(
         f"SELECT * FROM reference_check_log{where_clause} ORDER BY checked_at DESC LIMIT ? OFFSET ?",

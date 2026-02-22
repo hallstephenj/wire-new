@@ -712,18 +712,18 @@ a:hover { text-decoration: underline; }
    ══════════════════════════════════════════════════════════════════ */
 .references-layout {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 300px 1fr 1fr;
     width: 100%;
     overflow: hidden;
 }
 
-.references-sites-pane, .references-log-pane {
+.references-sites-pane, .references-gaps-pane, .references-log-pane {
     display: flex;
     flex-direction: column;
     overflow: hidden;
 }
 
-.references-sites-pane {
+.references-sites-pane, .references-gaps-pane {
     border-right: 1px solid #1a1a1a;
 }
 
@@ -835,6 +835,50 @@ a:hover { text-decoration: underline; }
 .ref-log-status.gap_filled { color: #ffb000; border-color: #665500; }
 .ref-log-status.gap_unfilled { color: #e04040; border-color: #6e2a2a; }
 .ref-log-status.error { color: #e04040; border-color: #6e2a2a; }
+
+.ref-gap-entry {
+    padding: 6px 0;
+    border-bottom: 1px solid #111;
+    font-size: 10px;
+}
+
+.ref-gap-headline {
+    color: #ccc;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.ref-gap-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 3px;
+    font-size: 9px;
+    color: #555;
+}
+
+.ref-gap-site {
+    color: #888;
+    font-weight: 700;
+}
+
+.ref-gap-result {
+    font-size: 9px;
+    color: #555;
+    margin-top: 2px;
+}
+
+.ref-gap-result a {
+    color: #ffb000;
+    font-size: 9px;
+}
+
+.ref-gaps-empty {
+    color: #333;
+    font-size: 11px;
+    padding: 20px 0;
+    text-align: center;
+}
 
 /* ══════════════════════════════════════════════════════════════════
    TAB 3: SYSTEM
@@ -1118,7 +1162,15 @@ a:hover { text-decoration: underline; }
                 </div>
             </div>
         </div>
-        <!-- Right: Check Log -->
+        <!-- Center: Coverage Gaps -->
+        <div class="references-gaps-pane">
+            <div class="panel-header">COVERAGE GAPS <span id="ref-gaps-count" style="color:#888;font-weight:400;"></span></div>
+            <div class="panel-body">
+                <div id="ref-gaps-list"></div>
+            </div>
+            <div class="pagination" id="ref-gaps-pagination"></div>
+        </div>
+        <!-- Right: Full Check Log -->
         <div class="references-log-pane">
             <div class="panel-header">CHECK LOG</div>
             <div class="panel-body">
@@ -1272,6 +1324,7 @@ document.querySelectorAll('#primary-tabs .primary-tab').forEach(btn => {
             fetchFilteredItems();
         } else if (activeTab === 'references') {
             fetchRefSites();
+            fetchRefGaps();
             fetchRefLog();
         } else if (activeTab === 'system') {
             fetchEvents();
@@ -2075,6 +2128,8 @@ function debouncedFetchFilteredItems() {
 // ── References ───────────────────────────────────────────────────────
 let refLogPage = 0;
 const refLogPerPage = 100;
+let refGapsPage = 0;
+const refGapsPerPage = 50;
 
 async function fetchRefSites() {
     try {
@@ -2156,6 +2211,7 @@ async function runRefCheck() {
             status.textContent = `${data.headlines_found} found, ${data.gaps_found} gaps, ${data.gaps_filled} filled`;
         }
         fetchRefSites();
+        fetchRefGaps();
         fetchRefLog();
         fetchStatus();
     } catch (e) {
@@ -2203,6 +2259,71 @@ function renderRefLog(entries, total) {
         <span>${refLogPage + 1} / ${totalPages || 1} (${total})</span>
         <button ${refLogPage >= totalPages - 1 ? 'disabled' : ''} onclick="refLogPage++; fetchRefLog();">NEXT</button>
     `;
+}
+
+// ── Reference Gaps ───────────────────────────────────────────────────
+async function fetchRefGaps() {
+    try {
+        const params = new URLSearchParams({
+            limit: refGapsPerPage,
+            offset: refGapsPage * refGapsPerPage,
+            status: 'gap_filled,gap_unfilled',
+        });
+        const resp = await fetch(`/api/river/references/log?${params}`);
+        const data = await resp.json();
+        renderRefGaps(data.entries, data.total);
+    } catch (e) {
+        console.error('Ref gaps fetch error:', e);
+    }
+}
+
+function renderRefGaps(entries, total) {
+    const countEl = document.getElementById('ref-gaps-count');
+    countEl.textContent = total > 0 ? `(${total})` : '';
+
+    const container = document.getElementById('ref-gaps-list');
+    if (entries.length === 0) {
+        container.innerHTML = '<div class="ref-gaps-empty">No coverage gaps detected</div>';
+    } else {
+        container.innerHTML = entries.map(e => {
+            const isFilled = e.status === 'gap_filled';
+            const statusBadge = `<span class="ref-log-status ${e.status}">${isFilled ? 'FILLED' : 'UNFILLED'}</span>`;
+            const clusterLink = e.matched_cluster_id
+                ? `<a href="#" onclick="event.preventDefault(); switchToStory('${e.matched_cluster_id}')" title="${e.matched_cluster_id}">${e.matched_cluster_id.substring(0, 8)}</a>`
+                : '';
+            const resultLine = isFilled
+                ? `<div class="ref-gap-result">matched cluster ${clusterLink}</div>`
+                : (e.detail ? `<div class="ref-gap-result">${esc(e.detail)}</div>` : '');
+            return `<div class="ref-gap-entry">
+                <div class="ref-gap-headline">${esc(e.headline)}</div>
+                <div class="ref-gap-meta">
+                    ${statusBadge}
+                    <span class="ref-gap-site">${esc(e.site_name)}</span>
+                    <span>${timeAgo(e.checked_at)}</span>
+                </div>
+                ${resultLine}
+            </div>`;
+        }).join('');
+    }
+
+    const totalPages = Math.ceil(total / refGapsPerPage);
+    const pag = document.getElementById('ref-gaps-pagination');
+    pag.innerHTML = total > refGapsPerPage ? `
+        <button ${refGapsPage === 0 ? 'disabled' : ''} onclick="refGapsPage--; fetchRefGaps();">PREV</button>
+        <span>${refGapsPage + 1} / ${totalPages || 1}</span>
+        <button ${refGapsPage >= totalPages - 1 ? 'disabled' : ''} onclick="refGapsPage++; fetchRefGaps();">NEXT</button>
+    ` : '';
+}
+
+function switchToStory(clusterId) {
+    // Switch to STORIES tab and try to locate the cluster
+    document.querySelectorAll('#primary-tabs .primary-tab').forEach(b => b.classList.remove('active'));
+    const storiesBtn = document.querySelector('#primary-tabs .primary-tab[data-tab="stories"]');
+    storiesBtn.classList.add('active');
+    activeTab = 'stories';
+    document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+    document.getElementById('tab-stories').classList.add('active');
+    fetchStories();
 }
 
 // ── Init ─────────────────────────────────────────────────────────────
