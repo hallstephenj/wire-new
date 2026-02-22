@@ -265,17 +265,17 @@ async def get_stories(
                           ELSE 3 END"""
     # Deprioritize "world" in the ALL view
     world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if category == "all" else "0+0"
-    # Hot score: quality-weighted coverage velocity with time decay
-    # source_count (distinct outlets) matters more than raw headline count
-    # to prevent junk outlets flooding with many similar headlines.
-    # Primary source quality multiplier rewards clusters led by reputable sources.
+    # Hot score: breadth-weighted with quality bonus and time decay.
+    # POWER(source_count, 1.5) rewards breadth super-linearly so 2-source
+    # stories can't outrank well-covered ones just by being fresh.
+    # Quality multiplier is a smaller bonus (sqrt) to avoid single-outlet dominance.
     hot_score = f"""(
-        sc.source_count * {_SOURCE_QUALITY_CASE}
+        POWER(sc.source_count, 1.5) * POWER({_SOURCE_QUALITY_CASE}, 0.5)
         / POWER(1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 4.0, 1.3)
     )"""
     if sort == "hot":
-        # Only show multi-source clusters
-        where.append("sc.source_count >= 2")
+        # Require meaningful breadth for hot ranking
+        where.append("sc.source_count >= 3")
         order = f"{sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC"
     else:
         order = f"{sort_prefix}, sc.published_at DESC"
@@ -809,11 +809,11 @@ async def river_stories(
     # Deprioritize "world" in the ALL view
     world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if category == "all" else "0+0"
     hot_score = f"""(
-        sc.source_count * {_SOURCE_QUALITY_CASE}
+        POWER(sc.source_count, 1.5) * POWER({_SOURCE_QUALITY_CASE}, 0.5)
         / POWER(1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 4.0, 1.3)
     )"""
     if sort == "hot":
-        where.append("sc.source_count >= 2")
+        where.append("sc.source_count >= 3")
         order = f"{sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC"
     else:
         order = f"{sort_prefix}, sc.published_at DESC"
