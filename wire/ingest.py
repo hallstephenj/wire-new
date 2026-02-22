@@ -1,5 +1,6 @@
 import re
 import uuid
+import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from time import mktime
@@ -191,16 +192,25 @@ async def poll_feeds(on_progress=None):
     feeds_cfg = load_feeds()
     log.info("Polling RSS feeds...")
     ev("ingest_start", job="rss")
-    count = 0
     all_feeds = [(cat, f) for cat, feeds in feeds_cfg["feeds"].items() for f in feeds]
-    for idx, (category, feed) in enumerate(all_feeds):
-        try:
-            n = await _poll_single_feed(feed["url"], feed["name"], category)
-            count += n
-        except Exception as e:
-            log.warning(f"Feed error {feed['name']}: {e}")
-        if on_progress:
-            on_progress(idx + 1, len(all_feeds))
+    total = len(all_feeds)
+    completed = 0
+    count = 0
+    sem = asyncio.Semaphore(8)
+
+    async def _poll_one(category, feed):
+        nonlocal completed, count
+        async with sem:
+            try:
+                n = await _poll_single_feed(feed["url"], feed["name"], category)
+                count += n
+            except Exception as e:
+                log.warning(f"Feed error {feed['name']}: {e}")
+            completed += 1
+            if on_progress:
+                on_progress(completed, total)
+
+    await asyncio.gather(*[_poll_one(cat, f) for cat, f in all_feeds])
     ev("ingest_done", job="rss", items=count)
     log.info(f"Ingested {count} new items")
     # Immediately rewrite any high-coverage clusters that need it

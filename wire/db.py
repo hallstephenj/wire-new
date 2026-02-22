@@ -19,6 +19,7 @@ def get_conn():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA busy_timeout=5000")
     return conn
 
 def init_db():
@@ -60,6 +61,9 @@ def init_db():
     CREATE INDEX IF NOT EXISTS idx_clusters_last_updated ON story_clusters(last_updated DESC);
     CREATE INDEX IF NOT EXISTS idx_raw_source_url ON raw_items(source_url);
     CREATE INDEX IF NOT EXISTS idx_raw_headline_source ON raw_items(original_headline, source_name);
+    CREATE INDEX IF NOT EXISTS idx_raw_cluster_published ON raw_items(cluster_id, published_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_raw_ingested ON raw_items(ingested_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_clusters_published ON story_clusters(published_at DESC);
 
     CREATE TABLE IF NOT EXISTS curation_overrides (
         cluster_id TEXT PRIMARY KEY REFERENCES story_clusters(id),

@@ -216,10 +216,14 @@ app = FastAPI(lifespan=lifespan)
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
+# Cache templates in memory at import time
+_TEMPLATES_DIR = Path(__file__).parent / "templates"
+_INDEX_HTML = (_TEMPLATES_DIR / "index.html").read_text()
+_RIVER_HTML = (_TEMPLATES_DIR / "river.html").read_text()
+
 @app.get("/", response_class=HTMLResponse)
 async def index():
-    html_path = Path(__file__).parent / "templates" / "index.html"
-    return HTMLResponse(html_path.read_text())
+    return HTMLResponse(_INDEX_HTML)
 
 @app.get("/api/boot-status")
 async def boot_status():
@@ -291,18 +295,36 @@ async def get_stories(
         LIMIT ? OFFSET ?
     """, (*params, limit, offset)).fetchall()
 
+    cluster_ids = [r["id"] for r in rows]
+
+    # Batch-fetch sources and items for all clusters in 2 queries instead of 2*N
+    sources_by_cluster = {}
+    items_by_cluster = {}
+    if cluster_ids:
+        ph = ",".join("?" for _ in cluster_ids)
+        all_sources = conn.execute(
+            f"SELECT cluster_id, source_name, MIN(source_url) as source_url FROM cluster_sources WHERE cluster_id IN ({ph}) GROUP BY cluster_id, source_name",
+            cluster_ids
+        ).fetchall()
+        for s in all_sources:
+            sources_by_cluster.setdefault(s["cluster_id"], []).append(s)
+
+        all_items = conn.execute(
+            f"SELECT cluster_id, original_headline, source_url, source_name, published_at FROM raw_items WHERE cluster_id IN ({ph}) ORDER BY published_at DESC",
+            cluster_ids
+        ).fetchall()
+        for i in all_items:
+            items_by_cluster.setdefault(i["cluster_id"], []).append(i)
+
     stories = []
     for r in rows:
-        sources = conn.execute(
-            "SELECT source_name, MIN(source_url) as source_url FROM cluster_sources WHERE cluster_id=? AND source_url != ? GROUP BY source_name",
-            (r["id"], r["primary_url"])
-        ).fetchall()
-        items = conn.execute(
-            "SELECT original_headline, source_url, source_name, published_at FROM raw_items WHERE cluster_id=? ORDER BY published_at DESC",
-            (r["id"],)
-        ).fetchall()
+        cid = r["id"]
+        other_sources = [{"name": s["source_name"], "url": s["source_url"]}
+                         for s in sources_by_cluster.get(cid, []) if s["source_url"] != r["primary_url"]]
+        items = [{"headline": i["original_headline"], "url": i["source_url"], "source": i["source_name"], "published_at": i["published_at"]}
+                 for i in items_by_cluster.get(cid, [])]
         stories.append({
-            "id": r["id"],
+            "id": cid,
             "headline": r["rewritten_headline"],
             "original_headline": r["original_headline"],
             "url": r["primary_url"],
@@ -313,8 +335,8 @@ async def get_stories(
             "published_at": r["published_at"],
             "last_updated": r["last_updated"],
             "breaking": bool(r["breaking"]),
-            "other_sources": [{"name": s["source_name"], "url": s["source_url"]} for s in sources],
-            "items": [{"headline": i["original_headline"], "url": i["source_url"], "source": i["source_name"], "published_at": i["published_at"]} for i in items],
+            "other_sources": other_sources,
+            "items": items,
         })
 
     total = conn.execute(f"SELECT COUNT(*) as c FROM story_clusters sc LEFT JOIN curation_overrides co ON co.cluster_id = sc.id WHERE {where_clause}", params).fetchone()["c"]
@@ -332,8 +354,7 @@ async def health():
 
 @app.get("/cp", response_class=HTMLResponse)
 async def river():
-    html_path = Path(__file__).parent / "templates" / "river.html"
-    return HTMLResponse(html_path.read_text())
+    return HTMLResponse(_RIVER_HTML)
 
 @app.get("/api/river/events")
 async def river_events(limit: int = Query(100, ge=1, le=500), event_type: str | None = None):
@@ -821,16 +842,29 @@ async def river_stories(
         LIMIT ? OFFSET ?
     """, (*params, limit, offset)).fetchall()
 
+    # Batch-fetch sources and items for all clusters (avoid N+1)
+    cluster_ids = [r["id"] for r in rows]
+    sources_by_cluster = {}
+    items_by_cluster = {}
+    if cluster_ids:
+        ph = ",".join("?" for _ in cluster_ids)
+        all_sources = conn.execute(
+            f"SELECT cluster_id, source_name, source_url FROM cluster_sources WHERE cluster_id IN ({ph})",
+            cluster_ids
+        ).fetchall()
+        for s in all_sources:
+            sources_by_cluster.setdefault(s["cluster_id"], []).append(s)
+        all_items = conn.execute(
+            f"SELECT cluster_id, id, original_headline, source_url, source_name, published_at FROM raw_items WHERE cluster_id IN ({ph}) ORDER BY published_at DESC",
+            cluster_ids
+        ).fetchall()
+        for i in all_items:
+            items_by_cluster.setdefault(i["cluster_id"], []).append(i)
+
     stories = []
     for r in rows:
-        sources = conn.execute(
-            "SELECT source_name, source_url FROM cluster_sources WHERE cluster_id=?",
-            (r["id"],)
-        ).fetchall()
-        items = conn.execute(
-            "SELECT id, original_headline, source_url, source_name, published_at FROM raw_items WHERE cluster_id=? ORDER BY published_at DESC",
-            (r["id"],)
-        ).fetchall()
+        sources = sources_by_cluster.get(r["id"], [])
+        items = items_by_cluster.get(r["id"], [])
         other_sources = [{"name": s["source_name"], "url": s["source_url"]} for s in sources if s["source_url"] != r["primary_url"]]
         stories.append({
             "id": r["id"],
