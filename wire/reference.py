@@ -186,19 +186,21 @@ async def fetch_site(url: str, parser_key: str, max_headlines: int = 20) -> list
 
 # ── Similarity check against existing clusters ────────────────────────
 
-def _find_matching_cluster(conn, headline: str, threshold: float = 0.30) -> str | None:
+def _find_matching_cluster(headline: str, threshold: float = 0.30) -> str | None:
     """Check if a headline matches any existing cluster via TF-IDF similarity."""
     from wire.config import load_config
+    from datetime import timedelta
     cfg = load_config()
     lookback = cfg["clustering"]["lookback_hours"]
     now = datetime.now(timezone.utc)
-    from datetime import timedelta
     cutoff = (now - timedelta(hours=lookback)).isoformat()
 
+    conn = get_conn()
     rows = conn.execute(
         "SELECT id, rewritten_headline FROM story_clusters WHERE last_updated > ? AND expires_at > ?",
         (cutoff, now.isoformat())
     ).fetchall()
+    conn.close()
 
     if not rows:
         return None
@@ -264,26 +266,26 @@ async def check_references(on_progress=None) -> dict:
                 on_progress(site_idx + 1, len(sites))
             continue
 
-        conn = get_conn()
+        # Collect log entries, then write them in one batch at the end
+        # to avoid holding a connection open during _poll_single_feed calls
+        log_entries = []
 
         for hl in headlines:
             headline_text = hl["headline"]
             headline_url = hl["url"]
 
             # Check if this headline matches an existing cluster
-            matched_cluster = _find_matching_cluster(conn, headline_text)
+            matched_cluster = _find_matching_cluster(headline_text)
 
             if matched_cluster:
-                conn.execute(
-                    "INSERT INTO reference_check_log (site_id, site_name, headline, source_url, status, matched_cluster_id, checked_at) VALUES (?,?,?,?,?,?,?)",
-                    (site["id"], site["name"], headline_text, headline_url, "matched", matched_cluster, now)
+                log_entries.append(
+                    (site["id"], site["name"], headline_text, headline_url, "matched", matched_cluster, None, now)
                 )
             else:
                 # Gap detected — try to fill via Google News search
                 site_gaps += 1
                 total_gaps += 1
 
-                filled = False
                 try:
                     # Search Google News RSS for this headline
                     search_query = headline_text[:80].replace(" ", "+")
@@ -292,32 +294,33 @@ async def check_references(on_progress=None) -> dict:
 
                     if ingested > 0:
                         # Re-check if a cluster now covers this headline
-                        new_match = _find_matching_cluster(conn, headline_text, threshold=0.25)
+                        new_match = _find_matching_cluster(headline_text, threshold=0.25)
                         if new_match:
-                            filled = True
                             total_filled += 1
-                            conn.execute(
-                                "INSERT INTO reference_check_log (site_id, site_name, headline, source_url, status, matched_cluster_id, detail, checked_at) VALUES (?,?,?,?,?,?,?,?)",
+                            log_entries.append(
                                 (site["id"], site["name"], headline_text, headline_url, "gap_filled", new_match, f"Ingested {ingested} items via search", now)
                             )
                         else:
-                            conn.execute(
-                                "INSERT INTO reference_check_log (site_id, site_name, headline, source_url, status, detail, checked_at) VALUES (?,?,?,?,?,?,?)",
-                                (site["id"], site["name"], headline_text, headline_url, "gap_unfilled", f"Searched but no cluster match (ingested {ingested})", now)
+                            log_entries.append(
+                                (site["id"], site["name"], headline_text, headline_url, "gap_unfilled", None, f"Searched but no cluster match (ingested {ingested})", now)
                             )
                     else:
-                        conn.execute(
-                            "INSERT INTO reference_check_log (site_id, site_name, headline, source_url, status, detail, checked_at) VALUES (?,?,?,?,?,?,?)",
-                            (site["id"], site["name"], headline_text, headline_url, "gap_unfilled", "No results from search", now)
+                        log_entries.append(
+                            (site["id"], site["name"], headline_text, headline_url, "gap_unfilled", None, "No results from search", now)
                         )
                 except Exception as e:
                     log.warning(f"Gap fill search failed for '{headline_text[:40]}': {e}")
-                    conn.execute(
-                        "INSERT INTO reference_check_log (site_id, site_name, headline, source_url, status, detail, checked_at) VALUES (?,?,?,?,?,?,?)",
-                        (site["id"], site["name"], headline_text, headline_url, "error", f"Search failed: {e}", now)
+                    log_entries.append(
+                        (site["id"], site["name"], headline_text, headline_url, "error", None, f"Search failed: {e}", now)
                     )
 
-        # Update site stats
+        # Write all log entries and update site stats in one batch
+        conn = get_conn()
+        for entry in log_entries:
+            conn.execute(
+                "INSERT INTO reference_check_log (site_id, site_name, headline, source_url, status, matched_cluster_id, detail, checked_at) VALUES (?,?,?,?,?,?,?,?)",
+                entry
+            )
         conn.execute(
             "UPDATE reference_sites SET last_checked=?, last_found=?, last_gaps=?, updated_at=? WHERE id=?",
             (now, site_found, site_gaps, now, site["id"])
