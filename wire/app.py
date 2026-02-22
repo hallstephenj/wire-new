@@ -24,6 +24,25 @@ log = logging.getLogger("wire")
 
 scheduler = AsyncIOScheduler()
 
+# SQL CASE expression: primary source quality multiplier for hot ranking.
+# Tier 1-2 sources get a strong boost, unknown/junk sources get penalized.
+# This prevents clusters full of low-quality outlets from outranking
+# smaller clusters covered by reputable sources.
+_SOURCE_QUALITY_CASE = """(CASE
+    WHEN sc.primary_source IN ('Reuters','AP') THEN 3.0
+    WHEN sc.primary_source IN ('New York Times','Wall Street Journal','Washington Post',
+        'BBC','Bloomberg','Financial Times','The Guardian','CNN','NBC News','NPR','Al Jazeera') THEN 2.5
+    WHEN sc.primary_source IN ('Ars Technica','ProPublica','MIT Technology Review','Nature',
+        'Politico','Wired','404 Media','The Atlantic','The Record') THEN 2.0
+    WHEN sc.primary_source IN ('TechCrunch','The Verge','Axios','CNBC','Fortune','Forbes',
+        'Fox Business','Business Insider','The Hill','Semafor','South China Morning Post',
+        'Nikkei Asia','MacRumors','CoinDesk','The Register') THEN 1.5
+    WHEN sc.primary_source IN ('9to5Google','Android Authority','Fox News','USA Today',
+        'MarketWatch','Yahoo Finance','Seeking Alpha','Motley Fool','Sky News','Barron''s') THEN 1.0
+    WHEN sc.primary_source IN ('MSN','AOL','Google News') THEN 0.6
+    ELSE 0.4
+END)"""
+
 boot_state = {
     "phase": "reference_check",   # reference_check → polling → clustering → rewriting → ready
     "detail": "",
@@ -242,12 +261,12 @@ async def get_stories(
                           ELSE 3 END"""
     # Deprioritize "world" in the ALL view
     world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if category == "all" else "0+0"
-    # Hot score: coverage velocity with steeper time decay
-    # Stories that accumulate many sources quickly rank highest.
-    # POWER decay (exponent 1.3) ensures older stories fade faster,
-    # so a 1hr-old story with 16 sources beats a 12hr-old story with 20.
-    hot_score = """(
-        (SELECT COUNT(DISTINCT ri3.original_headline) FROM raw_items ri3 WHERE ri3.cluster_id = sc.id) * 1.0
+    # Hot score: quality-weighted coverage velocity with time decay
+    # source_count (distinct outlets) matters more than raw headline count
+    # to prevent junk outlets flooding with many similar headlines.
+    # Primary source quality multiplier rewards clusters led by reputable sources.
+    hot_score = f"""(
+        sc.source_count * {_SOURCE_QUALITY_CASE}
         / POWER(1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 4.0, 1.3)
     )"""
     if sort == "hot":
@@ -768,8 +787,8 @@ async def river_stories(
 
     # Deprioritize "world" in the ALL view
     world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if category == "all" else "0+0"
-    hot_score = """(
-        (SELECT COUNT(DISTINCT ri3.original_headline) FROM raw_items ri3 WHERE ri3.cluster_id = sc.id) * 1.0
+    hot_score = f"""(
+        sc.source_count * {_SOURCE_QUALITY_CASE}
         / POWER(1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 4.0, 1.3)
     )"""
     if sort == "hot":
