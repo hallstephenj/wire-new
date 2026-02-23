@@ -47,12 +47,24 @@ async def startup_backfill():
 
     if cluster_count >= 100:
         log.info(f"Startup: {cluster_count} clusters found, skipping backfill")
-        boot_state["phase"] = "ready"
         boot_state["clusters"] = cluster_count
         boot_state["reference_progress"] = 1
         boot_state["polling_progress"] = 1
         boot_state["clustering_progress"] = 1
         boot_state["rewriting_progress"] = 1
+        # Still run dedup merge on existing clusters
+        try:
+            conn = get_conn()
+            merged = merge_existing_clusters(conn)
+            conn.close()
+            if merged:
+                log.info(f"Boot merge: combined {merged} duplicate clusters")
+                c = get_conn()
+                boot_state["clusters"] = c.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]
+                c.close()
+        except Exception as e:
+            log.warning(f"Boot merge error: {e}")
+        boot_state["phase"] = "ready"
         return
 
     log.info(f"Startup: only {cluster_count} clusters, running backfill...")

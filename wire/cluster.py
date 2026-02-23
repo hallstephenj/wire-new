@@ -106,9 +106,13 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
     now = datetime.now(timezone.utc)
     cutoff = (now - timedelta(hours=lookback)).isoformat()
 
-    # Get recent clusters
+    # Get recent clusters (include scoop_boosted_at for date-gating)
     rows = conn.execute(
-        "SELECT id, rewritten_headline, primary_source, source_count FROM story_clusters WHERE last_updated > ? AND expires_at > ?",
+        """SELECT sc.id, sc.rewritten_headline, sc.primary_source, sc.source_count,
+                  co.scoop_boosted_at
+           FROM story_clusters sc
+           LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+           WHERE sc.last_updated > ? AND sc.expires_at > ?""",
         (cutoff, now.isoformat())
     ).fetchall()
 
@@ -140,9 +144,16 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
                     best_topic_score = overlap
                     best_topic_idx = i
 
+        def _scoop_date_ok(candidate_idx):
+            """Reject matches to scoop-boosted clusters if the incoming article predates the scoop."""
+            scoop_at = rows[candidate_idx]["scoop_boosted_at"]
+            if not scoop_at or not published_at:
+                return True
+            return published_at >= scoop_at
+
         # ── Decision: combine both signals ───────────────────────────────
         # Strong TF-IDF match alone — headlines must be very similar
-        if best_tfidf_sim >= tfidf_threshold:
+        if best_tfidf_sim >= tfidf_threshold and _scoop_date_ok(best_tfidf_idx):
             cluster_id = rows[best_tfidf_idx]["id"]
             ev("cluster_hit", headline=headline, matched=rows[best_tfidf_idx]["rewritten_headline"],
                similarity=round(best_tfidf_sim, 3), method="tfidf")
@@ -151,7 +162,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
 
         # Topic overlap with even weak TF-IDF is enough
         # e.g. both mention "trump" + "tariff" with tfidf > topic_tfidf_threshold
-        if best_topic_score >= topic_overlap_min and best_tfidf_sim >= topic_tfidf_threshold and best_topic_idx >= 0:
+        if best_topic_score >= topic_overlap_min and best_tfidf_sim >= topic_tfidf_threshold and best_topic_idx >= 0 and _scoop_date_ok(best_topic_idx):
             cluster_id = rows[best_topic_idx]["id"]
             ev("cluster_hit", headline=headline, matched=rows[best_topic_idx]["rewritten_headline"],
                similarity=round(best_tfidf_sim, 3), topic_overlap=round(best_topic_score, 2), method="topic+tfidf")
@@ -159,7 +170,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
             return cluster_id
 
         # Strong topic overlap alone (2+ shared entities, very high overlap)
-        if best_topic_score >= topic_only_threshold and best_topic_idx >= 0:
+        if best_topic_score >= topic_only_threshold and best_topic_idx >= 0 and _scoop_date_ok(best_topic_idx):
             cluster_id = rows[best_topic_idx]["id"]
             ev("cluster_hit", headline=headline, matched=rows[best_topic_idx]["rewritten_headline"],
                topic_overlap=round(best_topic_score, 2), method="topic_only")
@@ -177,7 +188,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
                 if overlap > best_kw_count:
                     best_kw_count = overlap
                     best_kw_idx = i
-            if best_kw_count >= min_keyword_overlap and best_kw_idx >= 0:
+            if best_kw_count >= min_keyword_overlap and best_kw_idx >= 0 and _scoop_date_ok(best_kw_idx):
                 cluster_id = rows[best_kw_idx]["id"]
                 ev("cluster_hit", headline=headline, matched=rows[best_kw_idx]["rewritten_headline"],
                    similarity=round(best_tfidf_sim, 3), keyword_overlap=best_kw_count, method="keyword+tfidf")
