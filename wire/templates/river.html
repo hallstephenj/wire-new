@@ -1461,6 +1461,11 @@ a:hover { text-decoration: underline; }
                         <div class="job-field">next: <span id="reference_check-next">--</span></div>
                         <div class="job-countdown" id="reference_check-countdown">--:--</div>
                     </div>
+                    <div class="job-card" id="job-dedup">
+                        <div class="job-name">DEDUP</div>
+                        <div class="job-field">next: <span id="dedup-next">--</span></div>
+                        <div class="job-countdown" id="dedup-countdown">--:--</div>
+                    </div>
                     <div class="job-card" style="cursor:pointer;border-color:#ffb000;" onclick="doRecluster()">
                         <div class="job-name" style="color:#ffb000;">RECLUSTER</div>
                         <div class="job-field" id="recluster-status">click to rebuild</div>
@@ -1501,8 +1506,18 @@ a:hover { text-decoration: underline; }
             </div>
         </div>
 
-        <!-- Col 3: Live Config -->
+        <!-- Col 3: Algorithm + Live Config -->
         <div class="system-col">
+            <div class="panel">
+                <div class="panel-header">ALGORITHM</div>
+                <div class="panel-body">
+                    <div class="config-row">
+                        <select id="algo-select" class="config-input" style="width:220px;"></select>
+                        <button class="config-set" onclick="setAlgorithm()">APPLY</button>
+                    </div>
+                    <div id="algo-description" style="color:#555;font-size:9px;margin-top:4px;"></div>
+                </div>
+            </div>
             <div class="panel panel-grow">
                 <div class="panel-header">LIVE CONFIG</div>
                 <div class="panel-body">
@@ -1587,6 +1602,7 @@ document.querySelectorAll('#primary-tabs .primary-tab').forEach(btn => {
         } else if (activeTab === 'system') {
             fetchEvents();
             fetchSystemCategories();
+            fetchAlgorithm();
         }
     });
 });
@@ -1991,6 +2007,48 @@ async function setConfig(key, value) {
     }
 }
 
+// ── Algorithm ────────────────────────────────────────────────────────
+async function fetchAlgorithm() {
+    try {
+        const resp = await fetch('/api/river/algorithm');
+        const data = await resp.json();
+        const sel = document.getElementById('algo-select');
+        sel.innerHTML = data.versions.map(v =>
+            `<option value="${esc(v.name)}" ${v.name === data.active ? 'selected' : ''}>${esc(v.label)}</option>`
+        ).join('');
+        // Show description of selected version
+        const active = data.versions.find(v => v.name === data.active);
+        document.getElementById('algo-description').textContent = active ? active.description : '';
+        // Update description on change
+        sel.onchange = () => {
+            const v = data.versions.find(x => x.name === sel.value);
+            document.getElementById('algo-description').textContent = v ? v.description : '';
+        };
+    } catch (e) {
+        console.error('Algorithm fetch error:', e);
+    }
+}
+
+async function setAlgorithm() {
+    const version = document.getElementById('algo-select').value;
+    try {
+        const resp = await fetch('/api/river/algorithm', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ version })
+        });
+        const data = await resp.json();
+        if (data.status === 'ok') {
+            fetchAlgorithm();
+            fetchCurationLog();
+        } else {
+            alert(data.error || 'Algorithm update failed');
+        }
+    } catch (e) {
+        alert('Algorithm update failed: ' + e.message);
+    }
+}
+
 // ── Curation Log ─────────────────────────────────────────────────────
 async function fetchCurationLog() {
     try {
@@ -2071,7 +2129,7 @@ async function fetchStatus() {
         const resp = await fetch('/api/river/status');
         const data = await resp.json();
 
-        for (const id of ['rss', 'search', 'rewrite', 'cleanup', 'reference_check']) {
+        for (const id of ['rss', 'search', 'rewrite', 'cleanup', 'reference_check', 'dedup']) {
             const job = data.jobs[id];
             if (job) {
                 jobNextRuns[id] = job.next_run;
@@ -2251,7 +2309,7 @@ document.getElementById('show-hidden').addEventListener('change', () => { storie
 
 // ── Countdown ticker ─────────────────────────────────────────────────
 function updateCountdowns() {
-    for (const id of ['rss', 'search', 'rewrite', 'cleanup', 'reference_check']) {
+    for (const id of ['rss', 'search', 'rewrite', 'cleanup', 'reference_check', 'dedup']) {
         const el = document.getElementById(`${id}-countdown`);
         if (el) el.textContent = fmtCountdown(jobNextRuns[id]);
     }

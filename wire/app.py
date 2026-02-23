@@ -14,50 +14,16 @@ from wire.db import init_db, get_conn
 from wire.config import load_config, set_override, get_overrides
 from wire.ingest import poll_feeds, search_sweep, backfill_48h, invalidate_filter_cache
 from wire.rewrite import rewrite_pending
-from wire.cluster import assign_cluster
+from wire.cluster import assign_cluster, merge_existing_clusters
 from wire.events import snapshot as events_snapshot
 from wire.scores import all_scores, get_score
 from wire.reference import run_reference_check
+from wire.algorithm import get_active_version, build_source_quality_case, build_reputable_sources_sql, build_hot_score_sql, list_versions, set_active_version
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("wire")
 
 scheduler = AsyncIOScheduler()
-
-# SQL CASE expression: primary source quality multiplier for hot ranking.
-# Tier 1-2 sources get a strong boost, unknown/junk sources get penalized.
-# This prevents clusters full of low-quality outlets from outranking
-# smaller clusters covered by reputable sources.
-_SOURCE_QUALITY_CASE = """(CASE
-    WHEN sc.primary_source IN ('Reuters','AP') THEN 3.0
-    WHEN sc.primary_source IN ('New York Times','Wall Street Journal','Washington Post',
-        'BBC','Bloomberg','Financial Times','The Guardian','CNN','NBC News','NPR','Al Jazeera') THEN 2.5
-    WHEN sc.primary_source IN ('Ars Technica','ProPublica','MIT Technology Review','Nature',
-        'Politico','Wired','404 Media','The Atlantic','The Record') THEN 2.0
-    WHEN sc.primary_source IN ('TechCrunch','The Verge','Axios','CNBC','Fortune','Forbes',
-        'Fox Business','Business Insider','The Hill','Semafor','South China Morning Post',
-        'Nikkei Asia','MacRumors','CoinDesk','The Register') THEN 1.5
-    WHEN sc.primary_source IN ('9to5Google','Android Authority','Fox News','USA Today',
-        'MarketWatch','Yahoo Finance','Seeking Alpha','Motley Fool','Sky News','Barron''s') THEN 1.0
-    WHEN sc.primary_source IN ('MSN','AOL','Google News') THEN 0.6
-    ELSE 0.4
-END)"""
-
-# Sources considered "medium repute" or better (tier 1.0+) for breadth filtering.
-# A cluster needs >= 3 of these to qualify for hot ranking.
-_REPUTABLE_SOURCES_SQL = """('Reuters','AP',
-    'New York Times','Wall Street Journal','Washington Post',
-    'BBC','Bloomberg','Financial Times','The Guardian','CNN','NBC News','NPR','Al Jazeera',
-    'Ars Technica','ProPublica','MIT Technology Review','Nature',
-    'Politico','Wired','404 Media','The Atlantic','The Record',
-    'TechCrunch','The Verge','Axios','CNBC','Fortune','Forbes',
-    'Fox Business','Business Insider','The Hill','Semafor','South China Morning Post',
-    'Nikkei Asia','MacRumors','CoinDesk','The Register',
-    '9to5Google','Android Authority','Fox News','USA Today',
-    'MarketWatch','Yahoo Finance','Seeking Alpha','Motley Fool','Sky News','Barron''s',
-    'ABC News','CBS News','The Information','Engadget','TechRadar','ZDNet',
-    'PCMag','Tom''s Hardware','Phy.org','Space.com','France24',
-    'Euronews','The Economist','Foreign Policy','Defense One')"""
 
 boot_state = {
     "phase": "reference_check",   # reference_check → polling → clustering → rewriting → ready
@@ -191,7 +157,21 @@ async def startup_backfill():
     conn.close()
     boot_state["pending"] = 0
     boot_state["rewriting_progress"] = 1
+
+    # Merge duplicate clusters before going live
+    try:
+        conn = get_conn()
+        merged = merge_existing_clusters(conn)
+        conn.close()
+        if merged:
+            log.info(f"Boot merge: combined {merged} duplicate clusters")
+    except Exception as e:
+        log.warning(f"Boot merge error: {e}")
+
     boot_state["phase"] = "ready"
+    conn = get_conn()
+    boot_state["clusters"] = conn.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]
+    conn.close()
     log.info(f"Boot complete: {boot_state['clusters']} clusters")
 
 
@@ -209,6 +189,7 @@ async def _start_scheduler_after_boot():
     scheduler.add_job(rewrite_pending, "interval", minutes=2, id="rewrite", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(cleanup_expired, "interval", hours=cfg["polling"]["cleanup_interval_hours"], id="cleanup")
     scheduler.add_job(run_reference_check, "cron", hour=6, id="reference_check")
+    scheduler.add_job(deduplicate_clusters, "interval", hours=1, id="dedup")
     if not scheduler.running:
         scheduler.start()
     log.info("Scheduler started (post-boot)")
@@ -255,6 +236,7 @@ async def get_stories(
 ):
     conn = get_conn()
     now = datetime.now(timezone.utc).isoformat()
+    algo = get_active_version()
 
     where = ["sc.expires_at > ?"]
     params = [now]
@@ -264,7 +246,8 @@ async def get_stories(
 
     if category == "all":
         # Exclude "general" bucket from the all view
-        where.append("COALESCE(co.category_override, sc.category) != 'general'")
+        if algo.get("general_exclusion", True):
+            where.append("COALESCE(co.category_override, sc.category) != 'general'")
     else:
         where.append("COALESCE(co.category_override, sc.category) = ?")
         params.append(category)
@@ -280,19 +263,18 @@ async def get_stories(
                           WHEN COALESCE(co.boost, 0) < 0 THEN 4
                           ELSE 3 END"""
     # Deprioritize "world" in the ALL view
-    world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if category == "all" else "0+0"
-    # Hot score: breadth-weighted with quality bonus and time decay.
-    # POWER(source_count, 1.5) rewards breadth super-linearly so 2-source
-    # stories can't outrank well-covered ones just by being fresh.
-    # Quality multiplier is a smaller bonus (sqrt) to avoid single-outlet dominance.
-    hot_score = f"""(
-        POWER(sc.source_count, 1.5) * POWER({_SOURCE_QUALITY_CASE}, 0.5)
-        / POWER(1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 4.0, 1.3)
-    )"""
+    world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if (category == "all" and algo.get("world_deprio", True)) else "0+0"
+    hot_score = build_hot_score_sql(algo)
+    reputable_sources_sql = build_reputable_sources_sql(algo)
+    min_reputable = algo["min_reputable_sources"]
     if sort == "hot":
-        # Require at least 3 sources of medium repute or better
-        where.append(f"""(SELECT COUNT(DISTINCT cs2.source_name) FROM cluster_sources cs2
-            WHERE cs2.cluster_id = sc.id AND cs2.source_name IN {_REPUTABLE_SOURCES_SQL}) >= 3""")
+        reputable_filter = f"""(SELECT COUNT(DISTINCT cs2.source_name) FROM cluster_sources cs2
+            WHERE cs2.cluster_id = sc.id AND cs2.source_name IN {reputable_sources_sql}) >= {min_reputable}"""
+        # Scoop-boosted clusters bypass the min reputable sources filter
+        if algo.get("scoop_enabled"):
+            where.append(f"({reputable_filter} OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))")
+        else:
+            where.append(reputable_filter)
         order = f"{sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC"
     else:
         order = f"{sort_prefix}, sc.published_at DESC"
@@ -403,7 +385,7 @@ async def river_status():
     conn.close()
 
     jobs = {}
-    for job_id in ("rss", "search", "rewrite", "cleanup", "reference_check"):
+    for job_id in ("rss", "search", "rewrite", "cleanup", "reference_check", "dedup"):
         job = scheduler.get_job(job_id)
         if job:
             nrt = job.next_run_time
@@ -792,6 +774,28 @@ async def update_config(request: Request):
 
     return {"status": "ok", "key": key, "value": typed_value}
 
+@app.get("/api/river/algorithm")
+async def get_algorithm():
+    algo = get_active_version()
+    return {"active": algo["name"], "versions": list_versions()}
+
+@app.put("/api/river/algorithm")
+async def put_algorithm(request: Request):
+    body = await request.json()
+    version = body.get("version", "").strip()
+    if not version:
+        return JSONResponse({"error": "version required"}, status_code=400)
+    try:
+        old = get_active_version()["name"]
+        set_active_version(version)
+    except ValueError as e:
+        return JSONResponse({"error": str(e)}, status_code=400)
+    conn = get_conn()
+    _log_curation(conn, "algorithm_change", None, {"before": old, "after": version})
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "version": version}
+
 @app.get("/api/river/curation-log")
 async def get_curation_log(
     limit: int = Query(50, ge=1, le=500),
@@ -822,6 +826,7 @@ async def river_stories(
     """Control panel story browser — mirrors homepage query with curation overlays."""
     conn = get_conn()
     now = datetime.now(timezone.utc).isoformat()
+    algo = get_active_version()
 
     where = ["sc.expires_at > ?"]
     params = [now]
@@ -830,7 +835,8 @@ async def river_stories(
         where.append("(co.hidden IS NULL OR co.hidden = 0)")
 
     if category == "all":
-        where.append("COALESCE(co.category_override, sc.category) != 'general'")
+        if algo.get("general_exclusion", True):
+            where.append("COALESCE(co.category_override, sc.category) != 'general'")
     else:
         where.append("COALESCE(co.category_override, sc.category) = ?")
         params.append(category)
@@ -841,16 +847,18 @@ async def river_stories(
                           WHEN COALESCE(co.boost, 0) > 0 THEN 2
                           WHEN COALESCE(co.boost, 0) < 0 THEN 4
                           ELSE 3 END"""
-
     # Deprioritize "world" in the ALL view
-    world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if category == "all" else "0+0"
-    hot_score = f"""(
-        POWER(sc.source_count, 1.5) * POWER({_SOURCE_QUALITY_CASE}, 0.5)
-        / POWER(1.0 + MAX(0, (julianday('now') - julianday(sc.published_at)) * 24) / 4.0, 1.3)
-    )"""
+    world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if (category == "all" and algo.get("world_deprio", True)) else "0+0"
+    hot_score = build_hot_score_sql(algo)
+    reputable_sources_sql = build_reputable_sources_sql(algo)
+    min_reputable = algo["min_reputable_sources"]
     if sort == "hot":
-        where.append(f"""(SELECT COUNT(DISTINCT cs2.source_name) FROM cluster_sources cs2
-            WHERE cs2.cluster_id = sc.id AND cs2.source_name IN {_REPUTABLE_SOURCES_SQL}) >= 3""")
+        reputable_filter = f"""(SELECT COUNT(DISTINCT cs2.source_name) FROM cluster_sources cs2
+            WHERE cs2.cluster_id = sc.id AND cs2.source_name IN {reputable_sources_sql}) >= {min_reputable}"""
+        if algo.get("scoop_enabled"):
+            where.append(f"({reputable_filter} OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))")
+        else:
+            where.append(reputable_filter)
         order = f"{sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC"
     else:
         order = f"{sort_prefix}, sc.published_at DESC"
@@ -1564,7 +1572,7 @@ async def river_reboot():
         return JSONResponse({"status": "already_booting"}, status_code=409)
 
     # Stop scheduler jobs
-    for job_id in ("rss", "search", "rewrite", "cleanup", "reference_check"):
+    for job_id in ("rss", "search", "rewrite", "cleanup", "reference_check", "dedup"):
         job = scheduler.get_job(job_id)
         if job:
             job.remove()
@@ -1617,3 +1625,40 @@ async def cleanup_expired():
     conn.commit()
     conn.close()
     log.info("Cleaned up expired stories, old filtered items, and old reference logs")
+
+
+async def deduplicate_clusters():
+    """Hourly job: merge duplicate clusters + expire stale scoop boosts."""
+    try:
+        conn = get_conn()
+        merged = merge_existing_clusters(conn)
+        if merged:
+            log.info(f"Dedup job: merged {merged} duplicate clusters")
+
+        # Expire scoop boosts that haven't generated enough follow-on coverage
+        algo = get_active_version()
+        if algo.get("scoop_enabled"):
+            boost_hours = algo.get("scoop_boost_hours", 4)
+            min_sources = algo.get("scoop_min_sources_after", 2)
+            cutoff = (datetime.now(timezone.utc) - timedelta(hours=boost_hours)).isoformat()
+            stale_scoops = conn.execute("""
+                SELECT co.cluster_id, sc.source_count, sc.rewritten_headline
+                FROM curation_overrides co
+                JOIN story_clusters sc ON sc.id = co.cluster_id
+                WHERE co.scoop_boosted_at IS NOT NULL
+                  AND co.scoop_boosted_at < ?
+                  AND co.boost = 1
+                  AND sc.source_count < ?
+            """, (cutoff, min_sources)).fetchall()
+            for row in stale_scoops:
+                conn.execute(
+                    "UPDATE curation_overrides SET boost=0, updated_at=? WHERE cluster_id=?",
+                    (datetime.now(timezone.utc).isoformat(), row["cluster_id"])
+                )
+                log.info(f"Scoop expired: {row['rewritten_headline'][:60]} (only {row['source_count']} source(s))")
+            if stale_scoops:
+                conn.commit()
+
+        conn.close()
+    except Exception as e:
+        log.warning(f"Dedup job error: {e}")

@@ -159,6 +159,12 @@ def init_db():
         created_at TEXT,
         updated_at TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value TEXT,
+        updated_at TEXT
+    );
     """)
     # Migration: add published_at to story_clusters if missing
     cols = [r[1] for r in conn.execute("PRAGMA table_info(story_clusters)").fetchall()]
@@ -181,6 +187,8 @@ def init_db():
         conn.execute("ALTER TABLE curation_overrides ADD COLUMN note TEXT")
     if "expiry_override" not in co_cols:
         conn.execute("ALTER TABLE curation_overrides ADD COLUMN expiry_override TEXT")
+    if "scoop_boosted_at" not in co_cols:
+        conn.execute("ALTER TABLE curation_overrides ADD COLUMN scoop_boosted_at TEXT")
 
     # Seed content_filters if empty
     filter_count = conn.execute("SELECT COUNT(*) as c FROM content_filters").fetchone()["c"]
@@ -242,6 +250,9 @@ def init_db():
                 "INSERT INTO categories (name, sort_order, enabled, created_at, updated_at) VALUES (?,?,1,?,?)",
                 (name, sort_order, now, now)
             )
+
+    # Seed settings
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('algorithm_version', 'v1')")
 
     # Seed feed_sources from feeds.yaml if empty
     src_count = conn.execute("SELECT COUNT(*) as c FROM feed_sources").fetchone()["c"]

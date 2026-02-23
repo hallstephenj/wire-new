@@ -9,6 +9,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from wire.config import load_config
 from wire.events import push as ev
 from wire.scores import get_total_score
+from wire.algorithm import get_active_version
 
 log = logging.getLogger("wire.cluster")
 
@@ -94,8 +95,14 @@ def _keyword_overlap_score(kw_a: set, kw_b: set) -> int:
 def assign_cluster(conn, headline: str, url: str, source_name: str, category: str, published_at: str = None) -> str:
     """Find or create a cluster for this headline. Returns cluster_id."""
     cfg = load_config()
-    tfidf_threshold = cfg["clustering"]["similarity_threshold"]
-    lookback = cfg["clustering"]["lookback_hours"]
+    algo = get_active_version()
+    tfidf_threshold = algo.get("tfidf_threshold", cfg["clustering"]["similarity_threshold"])
+    lookback = algo.get("lookback_hours", cfg["clustering"]["lookback_hours"])
+    topic_tfidf_threshold = algo.get("topic_tfidf_threshold", 0.15)
+    topic_only_threshold = algo.get("topic_only_threshold", 1.0)
+    topic_overlap_min = algo.get("topic_overlap_min", 0.5)
+    keyword_tfidf_threshold = algo.get("keyword_tfidf_threshold", 0.10)
+    min_keyword_overlap = algo.get("min_keyword_overlap", 3)
     now = datetime.now(timezone.utc)
     cutoff = (now - timedelta(hours=lookback)).isoformat()
 
@@ -143,8 +150,8 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
             return cluster_id
 
         # Topic overlap with even weak TF-IDF is enough
-        # e.g. both mention "trump" + "tariff" with tfidf > 0.15
-        if best_topic_score >= 0.5 and best_tfidf_sim >= 0.15 and best_topic_idx >= 0:
+        # e.g. both mention "trump" + "tariff" with tfidf > topic_tfidf_threshold
+        if best_topic_score >= topic_overlap_min and best_tfidf_sim >= topic_tfidf_threshold and best_topic_idx >= 0:
             cluster_id = rows[best_topic_idx]["id"]
             ev("cluster_hit", headline=headline, matched=rows[best_topic_idx]["rewritten_headline"],
                similarity=round(best_tfidf_sim, 3), topic_overlap=round(best_topic_score, 2), method="topic+tfidf")
@@ -152,7 +159,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
             return cluster_id
 
         # Strong topic overlap alone (2+ shared entities, very high overlap)
-        if best_topic_score >= 1.0 and best_topic_idx >= 0:
+        if best_topic_score >= topic_only_threshold and best_topic_idx >= 0:
             cluster_id = rows[best_topic_idx]["id"]
             ev("cluster_hit", headline=headline, matched=rows[best_topic_idx]["rewritten_headline"],
                topic_overlap=round(best_topic_score, 2), method="topic_only")
@@ -160,9 +167,9 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
             return cluster_id
 
         # ── Pass 3: Keyword overlap ──────────────────────────────────────
-        # Catches developing story angles that share 3+ rare terms
+        # Catches developing story angles that share rare terms
         new_keywords = _extract_keywords(headline)
-        if new_keywords and best_tfidf_sim >= 0.10:
+        if new_keywords and best_tfidf_sim >= keyword_tfidf_threshold:
             best_kw_idx = -1
             best_kw_count = 0
             for i, ch in enumerate(cluster_headlines):
@@ -170,7 +177,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
                 if overlap > best_kw_count:
                     best_kw_count = overlap
                     best_kw_idx = i
-            if best_kw_count >= 3 and best_kw_idx >= 0:
+            if best_kw_count >= min_keyword_overlap and best_kw_idx >= 0:
                 cluster_id = rows[best_kw_idx]["id"]
                 ev("cluster_hit", headline=headline, matched=rows[best_kw_idx]["rewritten_headline"],
                    similarity=round(best_tfidf_sim, 3), keyword_overlap=best_kw_count, method="keyword+tfidf")
@@ -190,7 +197,38 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
         "INSERT OR IGNORE INTO cluster_sources (cluster_id, source_name, source_url, added_at) VALUES (?,?,?,?)",
         (cluster_id, source_name, url, now.isoformat())
     )
+
+    # Auto-boost scoops/exclusives from top-tier sources
+    _maybe_scoop_boost(conn, cluster_id, headline, source_name, algo, now)
+
     return cluster_id
+
+
+def _maybe_scoop_boost(conn, cluster_id: str, headline: str, source_name: str, algo: dict, now):
+    """Auto-boost clusters from top-tier sources with scoop/exclusive indicators."""
+    if not algo.get("scoop_enabled"):
+        return
+    scoop_sources = algo.get("scoop_sources", [])
+    scoop_patterns = algo.get("scoop_patterns", [])
+    if source_name not in scoop_sources or not scoop_patterns:
+        return
+    # Check if headline matches any scoop pattern
+    matched = False
+    for pattern in scoop_patterns:
+        if re.search(pattern, headline):
+            matched = True
+            break
+    if not matched:
+        return
+
+    now_iso = now.isoformat()
+    conn.execute("""
+        INSERT INTO curation_overrides (cluster_id, boost, scoop_boosted_at, updated_at)
+        VALUES (?, 1, ?, ?)
+        ON CONFLICT(cluster_id) DO UPDATE SET boost=1, scoop_boosted_at=?, updated_at=?
+    """, (cluster_id, now_iso, now_iso, now_iso, now_iso))
+    ev("scoop_boost", headline=headline, source=source_name, cluster_id=cluster_id[:8])
+    log.info(f"Scoop boost: [{source_name}] {headline[:80]}")
 
 
 def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline: str, category: str, published_at: str = None):
@@ -225,9 +263,18 @@ def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline:
 
 def merge_existing_clusters(conn):
     """
-    One-time pass to merge existing clusters that should be together.
-    Call this after improving clustering logic to clean up the backlog.
+    Merge existing clusters whose rewritten headlines are very similar.
+    Called at end of boot and hourly to catch duplicates that slip through.
+    Uses the active algorithm version's clustering thresholds.
     """
+    algo = get_active_version()
+    merge_tfidf = algo.get("tfidf_threshold", 0.30) + 0.05  # slightly looser than assign since headlines are rewritten
+    merge_topic_tfidf = algo.get("topic_tfidf_threshold", 0.15)
+    merge_topic_only = algo.get("topic_only_threshold", 1.0)
+    merge_topic_overlap_min = algo.get("topic_overlap_min", 0.5)
+    merge_kw_tfidf = algo.get("keyword_tfidf_threshold", 0.10)
+    merge_min_kw = algo.get("min_keyword_overlap", 3)
+
     now = datetime.now(timezone.utc)
     rows = conn.execute(
         "SELECT id, rewritten_headline, source_count FROM story_clusters WHERE expires_at > ? ORDER BY source_count DESC",
@@ -265,10 +312,10 @@ def merge_existing_clusters(conn):
             kw_overlap = _keyword_overlap_score(keyword_sets[i], keyword_sets[j])
 
             should_merge = (
-                sim >= 0.35 or
-                (sim >= 0.15 and topic_overlap >= 0.5) or
-                (topic_overlap >= 1.0) or
-                (kw_overlap >= 3 and sim >= 0.10)
+                sim >= merge_tfidf or
+                (sim >= merge_topic_tfidf and topic_overlap >= merge_topic_overlap_min) or
+                (topic_overlap >= merge_topic_only) or
+                (kw_overlap >= merge_min_kw and sim >= merge_kw_tfidf)
             )
 
             if should_merge:
