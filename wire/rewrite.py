@@ -44,11 +44,15 @@ Examples:
 VALID_CATEGORIES = {"tech", "markets", "politics", "world", "general"}
 
 
+_MAX_HEADLINES_PER_CLUSTER = 15
+
+
 def _build_rewrite_prompt(clusters):
     """Build a numbered prompt from a list of cluster dicts."""
     parts = []
     for i, c in enumerate(clusters):
-        headline_lines = "\n".join(f"  - [{src}] {hl}" for hl, src in c["headlines"])
+        headlines = c["headlines"][:_MAX_HEADLINES_PER_CLUSTER]
+        headline_lines = "\n".join(f"  - [{src}] {hl}" for hl, src in headlines)
         parts.append(f"{i+1}. Cluster headlines:\n{headline_lines}")
     return "\n\n".join(parts)
 
@@ -100,26 +104,89 @@ def _parse_rewrite_response(text, clusters, conn):
 _BATCH_CHUNK_SIZE = 50
 # Number of concurrent API requests
 _PARALLEL_REQUESTS = 3
+# API timeout in seconds
+_API_TIMEOUT = 60
+# Retry config
+_MAX_RETRIES = 2
+_RETRY_BACKOFF = 2  # seconds, doubled each retry
 
 
-async def _rewrite_chunk(client, model, clusters):
+async def _rewrite_chunk(client, model, clusters, timeout=_API_TIMEOUT):
     """Send one chunk of clusters to the API. Returns (clusters, response_text) or (clusters, None) on error."""
     prompt = _build_rewrite_prompt(clusters)
-    try:
-        resp = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: client.messages.create(
-                model=model,
-                max_tokens=4000,
-                system=SYSTEM_PROMPT,
-                messages=[{"role": "user", "content": prompt}]
+    last_err = None
+    for attempt in range(_MAX_RETRIES + 1):
+        try:
+            resp = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: client.messages.create(
+                        model=model,
+                        max_tokens=4000,
+                        system=SYSTEM_PROMPT,
+                        messages=[{"role": "user", "content": prompt}],
+                        timeout=timeout,
+                    )
+                ),
+                timeout=timeout + 10,
             )
+            return clusters, resp.content[0].text.strip()
+        except (asyncio.TimeoutError, TimeoutError) as e:
+            last_err = e
+            log.warning(f"Rewrite chunk timeout ({len(clusters)} clusters, attempt {attempt + 1})")
+        except anthropic.RateLimitError as e:
+            last_err = e
+            wait = _RETRY_BACKOFF * (2 ** attempt)
+            log.warning(f"Rewrite rate limited, waiting {wait}s (attempt {attempt + 1})")
+            await asyncio.sleep(wait)
+        except Exception as e:
+            last_err = e
+            if attempt < _MAX_RETRIES:
+                wait = _RETRY_BACKOFF * (2 ** attempt)
+                log.warning(f"Rewrite chunk error, retrying in {wait}s (attempt {attempt + 1}): {e}")
+                await asyncio.sleep(wait)
+            else:
+                break
+
+    ev("error", source="rewrite", message=str(last_err))
+    log.error(f"Rewrite chunk failed after {_MAX_RETRIES + 1} attempts ({len(clusters)} clusters): {last_err}")
+    return clusters, None
+
+
+def _fetch_clusters_for_rewrite(conn, now, limit):
+    """Query pending clusters and gather their headlines. Returns list of cluster dicts."""
+    rows = conn.execute("""
+        SELECT sc.id, sc.rewritten_headline, sc.source_count
+        FROM story_clusters sc
+        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+        WHERE sc.expires_at > ?
+        AND (sc.source_count >= 2 OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))
+        AND (co.locked IS NULL OR co.locked = 0)
+        AND EXISTS (
+            SELECT 1 FROM raw_items ri
+            WHERE ri.cluster_id = sc.id
+            AND ri.original_headline = sc.rewritten_headline
         )
-        return clusters, resp.content[0].text.strip()
-    except Exception as e:
-        ev("error", source="rewrite", message=str(e))
-        log.error(f"Rewrite chunk error ({len(clusters)} clusters): {e}")
-        return clusters, None
+        ORDER BY sc.source_count DESC, sc.last_updated DESC
+        LIMIT ?
+    """, (now, limit)).fetchall()
+
+    if not rows:
+        return []
+
+    clusters = []
+    for r in rows:
+        items = conn.execute(
+            "SELECT original_headline, source_name FROM raw_items WHERE cluster_id=? ORDER BY published_at ASC",
+            (r["id"],)
+        ).fetchall()
+        if items:
+            clusters.append({
+                "id": r["id"],
+                "current_headline": r["rewritten_headline"],
+                "headlines": [(i["original_headline"], i["source_name"]) for i in items],
+            })
+    return clusters
 
 
 async def rewrite_pending():
@@ -137,43 +204,8 @@ async def rewrite_pending():
     conn = get_conn()
     now = datetime.now(timezone.utc).isoformat()
 
-    # Grab up to chunk_size * parallel_requests clusters per pass
-    # Include scoop-boosted clusters even if they only have 1 source
     total_limit = _BATCH_CHUNK_SIZE * _PARALLEL_REQUESTS
-    rows = conn.execute("""
-        SELECT sc.id, sc.rewritten_headline, sc.source_count
-        FROM story_clusters sc
-        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
-        WHERE sc.expires_at > ?
-        AND (sc.source_count >= 2 OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))
-        AND (co.locked IS NULL OR co.locked = 0)
-        AND EXISTS (
-            SELECT 1 FROM raw_items ri
-            WHERE ri.cluster_id = sc.id
-            AND ri.original_headline = sc.rewritten_headline
-        )
-        ORDER BY sc.source_count DESC, sc.last_updated DESC
-        LIMIT ?
-    """, (now, total_limit)).fetchall()
-
-    if not rows:
-        conn.close()
-        return
-
-    # For each cluster, gather all headlines from its raw_items
-    clusters = []
-    for r in rows:
-        cluster_id = r["id"]
-        items = conn.execute(
-            "SELECT original_headline, source_name FROM raw_items WHERE cluster_id=? ORDER BY published_at ASC",
-            (cluster_id,)
-        ).fetchall()
-        if items:
-            clusters.append({
-                "id": cluster_id,
-                "current_headline": r["rewritten_headline"],
-                "headlines": [(i["original_headline"], i["source_name"]) for i in items],
-            })
+    clusters = _fetch_clusters_for_rewrite(conn, now, total_limit)
 
     if not clusters:
         conn.close()
@@ -199,6 +231,45 @@ async def rewrite_pending():
     conn.commit()
     if total_rewrites > 0:
         log.info(f"Rewrote {total_rewrites} headlines, recategorized {total_recats} ({len(chunks)} parallel batches)")
+    conn.close()
+
+
+# Boot rewrite: smaller batches, sequential to avoid rate limits
+_BOOT_CHUNK_SIZE = 15
+
+
+async def rewrite_boot():
+    """Rewrite pass optimized for boot: smaller sequential batches to avoid rate limits."""
+    cfg = load_config()
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        log.debug("No ANTHROPIC_API_KEY set, skipping boot rewrites")
+        return
+
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+
+    clusters = _fetch_clusters_for_rewrite(conn, now, _BOOT_CHUNK_SIZE * 3)
+    if not clusters:
+        conn.close()
+        return
+
+    chunks = [clusters[i:i + _BOOT_CHUNK_SIZE] for i in range(0, len(clusters), _BOOT_CHUNK_SIZE)]
+    client = anthropic.Anthropic(api_key=api_key)
+    model = cfg["ai"]["model"]
+
+    total_rewrites = 0
+    total_recats = 0
+    for chunk in chunks:
+        chunk_clusters, response_text = await _rewrite_chunk(client, model, chunk)
+        if response_text:
+            rw, rc = _parse_rewrite_response(response_text, chunk_clusters, conn)
+            total_rewrites += rw
+            total_recats += rc
+            conn.commit()
+
+    if total_rewrites > 0:
+        log.info(f"Boot rewrote {total_rewrites} headlines, recategorized {total_recats} ({len(chunks)} sequential batches)")
     conn.close()
 
 

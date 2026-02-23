@@ -13,7 +13,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from wire.db import init_db, get_conn
 from wire.config import load_config, set_override, get_overrides
 from wire.ingest import poll_feeds, search_sweep, backfill_48h, invalidate_filter_cache
-from wire.rewrite import rewrite_pending
+from wire.rewrite import rewrite_pending, rewrite_boot
 from wire.cluster import assign_cluster, merge_existing_clusters
 from wire.events import snapshot as events_snapshot
 from wire.scores import all_scores, get_score
@@ -153,9 +153,9 @@ async def startup_backfill():
     conn.close()
     boot_state["pending"] = pending
     if pending > 0:
-        log.info(f"Boot rewrite: {pending} pending, running single pass (scheduler handles rest)")
+        log.info(f"Boot rewrite: {pending} pending, running sequential boot pass (scheduler handles rest)")
         try:
-            await rewrite_pending()
+            await rewrite_boot()
         except Exception as e:
             log.warning(f"Boot rewrite error: {e}")
     boot_state["rewriting_progress"] = 1
@@ -219,6 +219,7 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _INDEX_HTML = (_TEMPLATES_DIR / "index.html").read_text()
 _RIVER_HTML = (_TEMPLATES_DIR / "river.html").read_text()
+_AUDIT_HTML = (_TEMPLATES_DIR / "audit.html").read_text()
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
@@ -355,6 +356,151 @@ async def health():
     items = conn.execute("SELECT COUNT(*) as c FROM raw_items").fetchone()["c"]
     conn.close()
     return {"status": "ok", "clusters": clusters, "raw_items": items}
+
+@app.get("/algo-audit", response_class=HTMLResponse)
+async def algo_audit():
+    return HTMLResponse(_AUDIT_HTML)
+
+@app.get("/api/audit/data")
+async def audit_data():
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+    algo = get_active_version()
+
+    # Helper: batch-fetch sources and items for a list of cluster rows
+    def _enrich(rows):
+        cluster_ids = [r["id"] for r in rows]
+        sources_by = {}
+        items_by = {}
+        if cluster_ids:
+            ph = ",".join("?" for _ in cluster_ids)
+            for s in conn.execute(
+                f"SELECT cluster_id, source_name, MIN(source_url) as source_url FROM cluster_sources WHERE cluster_id IN ({ph}) GROUP BY cluster_id, source_name",
+                cluster_ids
+            ).fetchall():
+                sources_by.setdefault(s["cluster_id"], []).append(s)
+            for i in conn.execute(
+                f"SELECT cluster_id, original_headline, source_url, source_name, published_at FROM raw_items WHERE cluster_id IN ({ph}) ORDER BY published_at DESC",
+                cluster_ids
+            ).fetchall():
+                items_by.setdefault(i["cluster_id"], []).append(i)
+        result = []
+        for r in rows:
+            cid = r["id"]
+            other_sources = [{"name": s["source_name"], "url": s["source_url"]}
+                             for s in sources_by.get(cid, []) if s["source_url"] != r["primary_url"]]
+            items = [{"headline": i["original_headline"], "url": i["source_url"], "source": i["source_name"], "published_at": i["published_at"]}
+                     for i in items_by.get(cid, [])]
+            result.append({
+                "id": cid,
+                "headline": r["rewritten_headline"],
+                "original_headline": r.get("original_headline", ""),
+                "url": r["primary_url"],
+                "source": r["primary_source"],
+                "category": r["category"],
+                "source_count": r["source_count"],
+                "published_at": r["published_at"],
+                "other_sources": other_sources,
+                "items": items,
+            })
+        return result
+
+    # Top 5 stories (hot sort)
+    hot_score = build_hot_score_sql(algo)
+    reputable_sources_sql = build_reputable_sources_sql(algo)
+    min_reputable = algo["min_reputable_sources"]
+    boost_hours = algo.get("scoop_boost_hours", 4)
+    sort_prefix = f"""CASE WHEN COALESCE(co.breaking, 0) = 1 THEN 0
+                          WHEN COALESCE(co.pinned, 0) = 1 THEN 1
+                          WHEN COALESCE(co.boost, 0) > 0 AND (co.scoop_boosted_at IS NULL OR co.scoop_boosted_at > datetime('now', '-{boost_hours} hours')) THEN 2
+                          WHEN COALESCE(co.boost, 0) < 0 THEN 4
+                          ELSE 3 END"""
+
+    reputable_filter = f"""(SELECT COUNT(DISTINCT cs2.source_name) FROM cluster_sources cs2
+        WHERE cs2.cluster_id = sc.id AND cs2.source_name IN {reputable_sources_sql}) >= {min_reputable}"""
+
+    top_rows = conn.execute(f"""
+        SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
+               sc.primary_url, sc.primary_source,
+               COALESCE(co.category_override, sc.category) as category,
+               sc.source_count, sc.published_at,
+               (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
+        FROM story_clusters sc
+        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+        WHERE sc.expires_at > ?
+          AND (co.hidden IS NULL OR co.hidden = 0)
+          AND {reputable_filter}
+        ORDER BY {sort_prefix}, {hot_score} DESC, sc.published_at DESC
+        LIMIT 5
+    """, (now,)).fetchall()
+    top_stories = _enrich(top_rows)
+
+    # 5 biggest multi-source clusters
+    big_rows = conn.execute(f"""
+        SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
+               sc.primary_url, sc.primary_source,
+               COALESCE(co.category_override, sc.category) as category,
+               sc.source_count, sc.published_at,
+               (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
+        FROM story_clusters sc
+        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+        WHERE sc.expires_at > ?
+          AND (co.hidden IS NULL OR co.hidden = 0)
+        ORDER BY sc.source_count DESC
+        LIMIT 5
+    """, (now,)).fetchall()
+    big_clusters = _enrich(big_rows)
+
+    # 10 random recent stories for category check
+    cat_rows = conn.execute(f"""
+        SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
+               sc.primary_url, sc.primary_source,
+               COALESCE(co.category_override, sc.category) as category,
+               sc.source_count, sc.published_at,
+               (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
+        FROM story_clusters sc
+        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+        WHERE sc.expires_at > ?
+          AND (co.hidden IS NULL OR co.hidden = 0)
+        ORDER BY RANDOM()
+        LIMIT 10
+    """, (now,)).fetchall()
+    category_sample = _enrich(cat_rows)
+
+    # 10 stories where rewritten headline differs from original
+    hl_rows = conn.execute(f"""
+        SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
+               sc.primary_url, sc.primary_source,
+               COALESCE(co.category_override, sc.category) as category,
+               sc.source_count, sc.published_at,
+               (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
+        FROM story_clusters sc
+        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+        WHERE sc.expires_at > ?
+          AND (co.hidden IS NULL OR co.hidden = 0)
+          AND sc.rewritten_headline IS NOT NULL
+          AND (SELECT ri3.original_headline FROM raw_items ri3 WHERE ri3.cluster_id = sc.id LIMIT 1) IS NOT NULL
+          AND sc.rewritten_headline != (SELECT ri4.original_headline FROM raw_items ri4 WHERE ri4.cluster_id = sc.id LIMIT 1)
+        ORDER BY RANDOM()
+        LIMIT 10
+    """, (now,)).fetchall()
+    headline_sample = _enrich(hl_rows)
+
+    # Source tiers from active algo version
+    source_tiers = {}
+    for mult, sources in algo["source_quality"].items():
+        source_tiers[str(mult)] = list(sources)
+
+    conn.close()
+
+    return {
+        "top_stories": top_stories,
+        "big_clusters": big_clusters,
+        "category_sample": category_sample,
+        "headline_sample": headline_sample,
+        "source_tiers": source_tiers,
+        "algo_version": algo["name"],
+    }
 
 @app.get("/cp", response_class=HTMLResponse)
 async def river():

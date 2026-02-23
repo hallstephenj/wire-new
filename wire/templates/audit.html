@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDROWIRE — ALGO AUDIT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" media="print" onload="this.media='all'">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #0a0a0a;
+    color: #cccccc;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.35;
+    -webkit-font-smoothing: antialiased;
+}
+
+#app {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 16px 20px 100px;
+}
+
+header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid #222;
+    padding-bottom: 12px;
+}
+
+.logo {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffb000;
+    letter-spacing: 4px;
+    text-decoration: none;
+}
+
+.subtitle {
+    font-size: 14px;
+    color: #666;
+    letter-spacing: 2px;
+}
+
+.back-link {
+    margin-left: auto;
+    color: #555;
+    text-decoration: none;
+    font-size: 12px;
+}
+.back-link:hover { color: #ffb000; }
+
+/* Progress bar */
+.progress-bar {
+    background: #111;
+    border: 1px solid #222;
+    height: 6px;
+    margin-bottom: 24px;
+    position: relative;
+}
+.progress-fill {
+    background: #ffb000;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+.progress-label {
+    font-size: 11px;
+    color: #555;
+    margin-bottom: 6px;
+    letter-spacing: 1px;
+}
+
+/* Steps */
+.audit-step { display: none; }
+.audit-step.active { display: block; }
+
+.step-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #ffb000;
+    margin-bottom: 4px;
+    letter-spacing: 2px;
+}
+
+.step-desc {
+    color: #666;
+    font-size: 12px;
+    margin-bottom: 20px;
+}
+
+/* Cards */
+.audit-card {
+    background: #111;
+    border: 1px solid #222;
+    padding: 14px 16px;
+    margin-bottom: 12px;
+}
+
+.audit-card .headline {
+    color: #ffb000;
+    font-weight: 700;
+    font-size: 14px;
+    margin-bottom: 6px;
+}
+
+.audit-card .meta {
+    color: #555;
+    font-size: 11px;
+    margin-bottom: 10px;
+}
+
+.audit-card .meta span {
+    margin-right: 12px;
+}
+
+.source-tag {
+    color: #4a9e4a;
+}
+
+.category-tag {
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* Sources list */
+.sources-list {
+    margin: 8px 0;
+    padding-left: 16px;
+    font-size: 11px;
+    color: #666;
+}
+.sources-list li { margin-bottom: 2px; }
+
+/* Raw items in cluster */
+.raw-items {
+    margin-top: 10px;
+    border-top: 1px solid #1a1a1a;
+    padding-top: 8px;
+}
+
+.raw-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+}
+
+.raw-item .ri-headline { color: #999; flex: 1; }
+.raw-item .ri-source { color: #4a9e4a; font-size: 11px; white-space: nowrap; }
+
+/* Rating controls */
+.rating-row {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.stars {
+    display: flex;
+    gap: 4px;
+}
+
+.star {
+    cursor: pointer;
+    font-size: 18px;
+    color: #333;
+    transition: color 0.15s;
+    user-select: none;
+}
+.star.filled { color: #ffb000; }
+.star:hover { color: #ffb000; }
+
+.flag-btns {
+    display: flex;
+    gap: 4px;
+}
+
+.flag-btn {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #888;
+    padding: 3px 10px;
+    font-family: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.flag-btn:hover { border-color: #ffb000; color: #ffb000; }
+.flag-btn.selected {
+    background: #ffb000;
+    color: #0a0a0a;
+    border-color: #ffb000;
+}
+
+/* Checkbox */
+.doesnt-belong {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #888;
+    cursor: pointer;
+}
+.doesnt-belong input { accent-color: #ffb000; }
+
+/* Category controls */
+.cat-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+}
+
+.cat-label {
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 12px;
+    min-width: 80px;
+}
+
+select {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 12px;
+    padding: 4px 8px;
+}
+select:focus { border-color: #ffb000; outline: none; }
+
+/* Headline comparison */
+.headline-pair {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 6px;
+}
+
+.hl-label {
+    font-size: 10px;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.hl-original { color: #888; font-size: 12px; }
+.hl-rewritten { color: #ffb000; font-size: 13px; font-weight: 700; }
+
+/* Source tiers */
+.tier-section {
+    margin-bottom: 16px;
+}
+
+.tier-header {
+    color: #ffb000;
+    font-weight: 700;
+    font-size: 13px;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+}
+
+.tier-source {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0;
+    font-size: 12px;
+}
+
+.tier-source .ts-name { color: #ccc; min-width: 180px; }
+
+/* Textarea */
+textarea {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 13px;
+    padding: 12px;
+    width: 100%;
+    min-height: 160px;
+    resize: vertical;
+}
+textarea:focus { border-color: #ffb000; outline: none; }
+textarea::placeholder { color: #444; }
+
+/* Summary */
+.summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+
+.summary-card {
+    background: #111;
+    border: 1px solid #222;
+    padding: 14px;
+}
+
+.summary-card .sc-label {
+    font-size: 11px;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+}
+
+.summary-card .sc-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #ffb000;
+}
+
+/* Nav buttons */
+.nav-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #0a0a0a;
+    border-top: 1px solid #222;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    z-index: 100;
+}
+
+.nav-btn {
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 8px 32px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    transition: all 0.15s;
+}
+.nav-btn:hover { border-color: #ffb000; color: #ffb000; }
+.nav-btn.primary {
+    background: #ffb000;
+    color: #0a0a0a;
+    border-color: #ffb000;
+}
+.nav-btn.primary:hover { background: #e6a000; }
+.nav-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+
+/* Loading */
+.loading {
+    text-align: center;
+    color: #555;
+    padding: 60px 0;
+    font-size: 14px;
+    letter-spacing: 2px;
+}
+
+@media (max-width: 600px) {
+    .headline-pair { grid-template-columns: 1fr; }
+    .summary-grid { grid-template-columns: 1fr; }
+    .rating-row { gap: 10px; }
+    .tier-source .ts-name { min-width: 120px; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+    <header>
+        <a href="/" class="logo">EDROWIRE</a>
+        <span class="subtitle">ALGO AUDIT</span>
+        <a href="/" class="back-link">back to wire</a>
+    </header>
+
+    <div class="progress-label">STEP <span id="stepNum">1</span> OF 7</div>
+    <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:14.28%"></div></div>
+
+    <div id="loading" class="loading">LOADING AUDIT DATA...</div>
+
+    <div id="step1" class="audit-step">
+        <div class="step-title">1 — TOP RANKING</div>
+        <div class="step-desc">Rate the current top 5 stories. Do they deserve their positions?</div>
+        <div id="step1Content"></div>
+    </div>
+
+    <div id="step2" class="audit-step">
+        <div class="step-title">2 — CLUSTERING QUALITY</div>
+        <div class="step-desc">Are the biggest clusters grouping the same story correctly?</div>
+        <div id="step2Content"></div>
+    </div>
+
+    <div id="step3" class="audit-step">
+        <div class="step-title">3 — CATEGORY ACCURACY</div>
+        <div class="step-desc">Check auto-assigned categories on 10 random stories.</div>
+        <div id="step3Content"></div>
+    </div>
+
+    <div id="step4" class="audit-step">
+        <div class="step-title">4 — HEADLINE QUALITY</div>
+        <div class="step-desc">Rate the quality of rewritten headlines vs their originals.</div>
+        <div id="step4Content"></div>
+    </div>
+
+    <div id="step5" class="audit-step">
+        <div class="step-title">5 — SOURCE TIERS</div>
+        <div class="step-desc">Review source quality tier assignments.</div>
+        <div id="step5Content"></div>
+    </div>
+
+    <div id="step6" class="audit-step">
+        <div class="step-title">6 — MISSING STORIES</div>
+        <div class="step-desc">Note any important stories from today that are missing.</div>
+        <div id="step6Content"></div>
+    </div>
+
+    <div id="step7" class="audit-step">
+        <div class="step-title">7 — SUMMARY</div>
+        <div class="step-desc">Review your audit and export results.</div>
+        <div id="step7Content"></div>
+    </div>
+</div>
+
+<div class="nav-bar">
+    <button class="nav-btn" id="btnBack" onclick="prevStep()" disabled>BACK</button>
+    <button class="nav-btn primary" id="btnNext" onclick="nextStep()">NEXT</button>
+</div>
+
+<script>
+let auditData = null;
+let currentStep = 1;
+const TOTAL_STEPS = 7;
+const CATEGORIES = ['tech', 'markets', 'politics', 'world', 'general'];
+const responses = [];
+
+function addResponse(step, item_id, headline, field, value, notes) {
+    // Remove existing response for same step+item+field
+    const idx = responses.findIndex(r => r.step === step && r.item_id === item_id && r.field === field);
+    if (idx >= 0) responses.splice(idx, 1);
+    responses.push({ step, item_id, headline, field, value, notes: notes || '' });
+}
+
+function getResponse(step, item_id, field) {
+    return responses.find(r => r.step === step && r.item_id === item_id && r.field === field);
+}
+
+// Stars component
+function starsHTML(step, id, headline, field) {
+    const existing = getResponse(step, id, field);
+    const val = existing ? parseInt(existing.value) : 0;
+    let h = '<div class="stars">';
+    for (let i = 1; i <= 5; i++) {
+        h += `<span class="star ${i <= val ? 'filled' : ''}" data-step="${step}" data-id="${id}" data-headline="${encodeURIComponent(headline)}" data-field="${field}" data-val="${i}" onclick="rateStar(this)">&#9733;</span>`;
+    }
+    h += '</div>';
+    return h;
+}
+
+function rateStar(el) {
+    const step = el.dataset.step;
+    const id = el.dataset.id;
+    const headline = decodeURIComponent(el.dataset.headline);
+    const field = el.dataset.field;
+    const val = parseInt(el.dataset.val);
+    addResponse(step, id, headline, field, String(val));
+    // Update UI
+    const parent = el.parentElement;
+    parent.querySelectorAll('.star').forEach(s => {
+        s.classList.toggle('filled', parseInt(s.dataset.val) <= val);
+    });
+}
+
+function flagClick(el) {
+    const step = el.dataset.step;
+    const id = el.dataset.id;
+    const headline = decodeURIComponent(el.dataset.headline);
+    const field = el.dataset.field;
+    const val = el.dataset.val;
+    addResponse(step, id, headline, field, val);
+    // Update UI
+    el.parentElement.querySelectorAll('.flag-btn').forEach(b => {
+        b.classList.toggle('selected', b.dataset.val === val);
+    });
+}
+
+function esc(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function timeAgo(iso) {
+    if (!iso) return '';
+    const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+    if (diff < 60) return 'just now';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm ago';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h ago';
+    return Math.floor(diff / 86400) + 'd ago';
+}
+
+// Step 1: Top Ranking
+function renderStep1() {
+    const stories = auditData.top_stories || [];
+    let h = '';
+    stories.forEach((s, i) => {
+        const allSources = (s.other_sources || []).map(o => o.name);
+        allSources.unshift(s.source);
+        h += `<div class="audit-card">
+            <div class="headline">#${i + 1} — ${esc(s.headline)}</div>
+            <div class="meta">
+                <span class="source-tag">${esc(s.source)}</span>
+                <span>${s.source_count} sources</span>
+                <span>${timeAgo(s.published_at)}</span>
+                <span class="category-tag">${esc(s.category)}</span>
+            </div>
+            <ul class="sources-list">${allSources.map(n => `<li>${esc(n)}</li>`).join('')}</ul>
+            <div class="rating-row">
+                ${starsHTML('ranking', s.id, s.headline, 'position_rating')}
+                <div class="flag-btns">
+                    ${['too_high', 'about_right', 'too_low'].map(v => {
+                        const existing = getResponse('ranking', s.id, 'position_flag');
+                        const sel = existing && existing.value === v ? 'selected' : '';
+                        const label = v.replace('_', ' ');
+                        return `<button class="flag-btn ${sel}" data-step="ranking" data-id="${s.id}" data-headline="${encodeURIComponent(s.headline)}" data-field="position_flag" data-val="${v}" onclick="flagClick(this)">${label}</button>`;
+                    }).join('')}
+                </div>
+            </div>
+        </div>`;
+    });
+    document.getElementById('step1Content').innerHTML = h || '<div class="loading">No stories available</div>';
+}
+
+// Step 2: Clustering Quality
+function renderStep2() {
+    const clusters = auditData.big_clusters || [];
+    let h = '';
+    clusters.forEach(c => {
+        const items = c.items || [];
+        h += `<div class="audit-card">
+            <div class="headline">${esc(c.headline)} <span style="color:#555;font-weight:400;font-size:12px">(${c.source_count} sources)</span></div>
+            <div class="raw-items">
+                ${items.map(it => `<div class="raw-item">
+                    <label class="doesnt-belong">
+                        <input type="checkbox" onchange="toggleBelong(this, '${c.id}', '${encodeURIComponent(it.url)}', '${encodeURIComponent(it.headline)}')" ${getResponse('clustering', c.id + ':' + it.url, 'belongs') ? 'checked' : ''}>
+                    </label>
+                    <span class="ri-headline">${esc(it.headline)}</span>
+                    <span class="ri-source">${esc(it.source)}</span>
+                </div>`).join('')}
+            </div>
+            <div class="rating-row">
+                ${starsHTML('clustering', c.id, c.headline, 'cluster_rating')}
+                <span style="font-size:11px;color:#555">Are all headlines the same story?</span>
+            </div>
+        </div>`;
+    });
+    document.getElementById('step2Content').innerHTML = h || '<div class="loading">No clusters available</div>';
+}
+
+function toggleBelong(el, clusterId, itemUrl, itemHeadline) {
+    const id = clusterId + ':' + decodeURIComponent(itemUrl);
+    const headline = decodeURIComponent(itemHeadline);
+    if (el.checked) {
+        addResponse('clustering', id, headline, 'belongs', 'no', 'Doesn\'t belong');
+    } else {
+        const idx = responses.findIndex(r => r.step === 'clustering' && r.item_id === id && r.field === 'belongs');
+        if (idx >= 0) responses.splice(idx, 1);
+    }
+}
+
+// Step 3: Category Accuracy
+function renderStep3() {
+    const stories = auditData.category_sample || [];
+    let h = '';
+    stories.forEach(s => {
+        const existingCorrect = getResponse('category', s.id, 'category_correct');
+        const existingCat = getResponse('category', s.id, 'correct_category');
+        h += `<div class="audit-card">
+            <div class="headline">${esc(s.headline)}</div>
+            <div class="meta"><span class="source-tag">${esc(s.source)}</span> <span>${timeAgo(s.published_at)}</span></div>
+            <div class="cat-row">
+                <span class="cat-label">${esc(s.category)}</span>
+                <div class="flag-btns">
+                    <button class="flag-btn ${existingCorrect && existingCorrect.value === 'yes' ? 'selected' : ''}" data-step="category" data-id="${s.id}" data-headline="${encodeURIComponent(s.headline)}" data-field="category_correct" data-val="yes" onclick="flagClick(this)">correct</button>
+                    <button class="flag-btn ${existingCorrect && existingCorrect.value === 'no' ? 'selected' : ''}" data-step="category" data-id="${s.id}" data-headline="${encodeURIComponent(s.headline)}" data-field="category_correct" data-val="no" onclick="flagClick(this)">wrong</button>
+                </div>
+                <select onchange="addResponse('category','${s.id}','${encodeURIComponent(s.headline)}','correct_category',this.value)">
+                    <option value="">right category...</option>
+                    ${CATEGORIES.map(c => `<option value="${c}" ${existingCat && existingCat.value === c ? 'selected' : ''}>${c.toUpperCase()}</option>`).join('')}
+                </select>
+            </div>
+        </div>`;
+    });
+    document.getElementById('step3Content').innerHTML = h || '<div class="loading">No stories available</div>';
+}
+
+// Step 4: Headline Quality
+function renderStep4() {
+    const stories = auditData.headline_sample || [];
+    let h = '';
+    stories.forEach(s => {
+        h += `<div class="audit-card">
+            <div class="headline-pair">
+                <div><div class="hl-label">Original</div><div class="hl-original">${esc(s.original_headline)}</div></div>
+                <div><div class="hl-label">Rewritten</div><div class="hl-rewritten">${esc(s.headline)}</div></div>
+            </div>
+            <div class="meta"><span class="source-tag">${esc(s.source)}</span></div>
+            <div class="rating-row">
+                ${starsHTML('headline', s.id, s.headline, 'headline_rating')}
+                <span style="font-size:11px;color:#555">Accurate and clear?</span>
+            </div>
+        </div>`;
+    });
+    document.getElementById('step4Content').innerHTML = h || '<div class="loading">No headline samples available</div>';
+}
+
+// Step 5: Source Tiers
+function renderStep5() {
+    const tiers = auditData.source_tiers || {};
+    const tierLabels = { '3.0': 'TIER 1 — Wire Services (3.0x)', '2.5': 'TIER 2 — Major Outlets (2.5x)', '2.0': 'TIER 3 — Specialist (2.0x)', '1.5': 'TIER 4 — Trade Press (1.5x)', '1.0': 'TIER 5 — Niche (1.0x)', '0.6': 'TIER 6 — Aggregators (0.6x)' };
+    let h = '';
+    for (const [mult, sources] of Object.entries(tiers)) {
+        h += `<div class="tier-section">
+            <div class="tier-header">${tierLabels[mult] || 'TIER ' + mult}</div>
+            ${sources.map(name => {
+                const existing = getResponse('source_tier', name, 'tier_flag');
+                return `<div class="tier-source">
+                    <span class="ts-name">${esc(name)}</span>
+                    <div class="flag-btns">
+                        ${['move_up', 'correct', 'move_down'].map(v => {
+                            const sel = existing && existing.value === v ? 'selected' : '';
+                            return `<button class="flag-btn ${sel}" data-step="source_tier" data-id="${name}" data-headline="" data-field="tier_flag" data-val="${v}" onclick="flagClick(this)">${v.replace('_', ' ')}</button>`;
+                        }).join('')}
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>`;
+    }
+    document.getElementById('step5Content').innerHTML = h || '<div class="loading">No tier data available</div>';
+}
+
+// Step 6: Missing Stories
+function renderStep6() {
+    const existing = getResponse('missing', '', 'missing_stories');
+    document.getElementById('step6Content').innerHTML = `
+        <div class="audit-card">
+            <textarea id="missingText" placeholder="What important stories from today are missing from EDROWIRE?"
+                oninput="addResponse('missing','','','missing_stories',this.value)">${existing ? esc(existing.value) : ''}</textarea>
+        </div>`;
+}
+
+// Step 7: Summary
+function renderStep7() {
+    const avgByStep = {};
+    const countByStep = {};
+    const flaggedCount = {};
+
+    responses.forEach(r => {
+        if (r.field.endsWith('_rating')) {
+            avgByStep[r.step] = (avgByStep[r.step] || 0) + parseInt(r.value);
+            countByStep[r.step] = (countByStep[r.step] || 0) + 1;
+        }
+        if (r.field === 'position_flag' && r.value !== 'about_right') {
+            flaggedCount['ranking'] = (flaggedCount['ranking'] || 0) + 1;
+        }
+        if (r.field === 'category_correct' && r.value === 'no') {
+            flaggedCount['category'] = (flaggedCount['category'] || 0) + 1;
+        }
+        if (r.field === 'belongs' && r.value === 'no') {
+            flaggedCount['clustering'] = (flaggedCount['clustering'] || 0) + 1;
+        }
+        if (r.field === 'tier_flag' && r.value !== 'correct') {
+            flaggedCount['source_tier'] = (flaggedCount['source_tier'] || 0) + 1;
+        }
+    });
+
+    const stepNames = { ranking: 'Top Ranking', clustering: 'Clustering', headline: 'Headlines' };
+    let summaryCards = '';
+    for (const [step, total] of Object.entries(avgByStep)) {
+        const avg = (total / countByStep[step]).toFixed(1);
+        summaryCards += `<div class="summary-card">
+            <div class="sc-label">${stepNames[step] || step} avg rating</div>
+            <div class="sc-value">${avg} / 5</div>
+        </div>`;
+    }
+    for (const [step, count] of Object.entries(flaggedCount)) {
+        summaryCards += `<div class="summary-card">
+            <div class="sc-label">${stepNames[step] || step} flagged</div>
+            <div class="sc-value">${count}</div>
+        </div>`;
+    }
+
+    summaryCards += `<div class="summary-card">
+        <div class="sc-label">Total Responses</div>
+        <div class="sc-value">${responses.length}</div>
+    </div>`;
+
+    summaryCards += `<div class="summary-card">
+        <div class="sc-label">Algo Version</div>
+        <div class="sc-value">${esc(auditData.algo_version || '?')}</div>
+    </div>`;
+
+    document.getElementById('step7Content').innerHTML = `
+        <div class="summary-grid">${summaryCards}</div>
+        <button class="nav-btn primary" onclick="downloadCSV()" style="width:100%;padding:14px;font-size:14px">DOWNLOAD AUDIT CSV</button>`;
+}
+
+function downloadCSV() {
+    const header = 'step,item_id,headline,field,value,notes\n';
+    const csvEsc = s => {
+        if (!s) return '';
+        s = String(s);
+        if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+            return '"' + s.replace(/"/g, '""') + '"';
+        }
+        return s;
+    };
+    const rows = responses.map(r =>
+        [r.step, r.item_id, r.headline, r.field, r.value, r.notes].map(csvEsc).join(',')
+    ).join('\n');
+    const blob = new Blob([header + rows], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const d = new Date();
+    a.download = `edrowire-audit-${d.toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// Navigation
+function showStep(n) {
+    currentStep = n;
+    document.querySelectorAll('.audit-step').forEach(el => el.classList.remove('active'));
+    const stepEl = document.getElementById('step' + n);
+    if (stepEl) stepEl.classList.add('active');
+    document.getElementById('stepNum').textContent = n;
+    document.getElementById('progressFill').style.width = (n / TOTAL_STEPS * 100) + '%';
+    document.getElementById('btnBack').disabled = n === 1;
+
+    const btnNext = document.getElementById('btnNext');
+    if (n === TOTAL_STEPS) {
+        btnNext.style.display = 'none';
+    } else {
+        btnNext.style.display = '';
+        btnNext.textContent = 'NEXT';
+    }
+
+    // Render step content
+    const renderers = { 1: renderStep1, 2: renderStep2, 3: renderStep3, 4: renderStep4, 5: renderStep5, 6: renderStep6, 7: renderStep7 };
+    if (renderers[n]) renderers[n]();
+    window.scrollTo(0, 0);
+}
+
+function nextStep() { if (currentStep < TOTAL_STEPS) showStep(currentStep + 1); }
+function prevStep() { if (currentStep > 1) showStep(currentStep - 1); }
+
+// Fetch & init
+async function fetchAuditData() {
+    try {
+        const res = await fetch('/api/audit/data');
+        if (!res.ok) throw new Error('Failed to load audit data');
+        auditData = await res.json();
+        document.getElementById('loading').style.display = 'none';
+        showStep(1);
+    } catch (e) {
+        document.getElementById('loading').textContent = 'ERROR: ' + e.message;
+    }
+}
+
+fetchAuditData();
+</script>
+</body>
+</html>
