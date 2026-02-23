@@ -136,62 +136,28 @@ async def startup_backfill():
     boot_state["clustering_progress"] = 1
     log.info(f"Boot clustering done: {boot_state['clusters']} clusters")
 
-    # Phase 3: rewriting — track pending countdown
+    # Phase 3: rewriting — single pass for top stories, scheduler handles the rest
     boot_state["phase"] = "rewriting"
     boot_state["detail"] = ""
-    initial_pending = None
-    consecutive_failures = 0
-    for i in range(20):
-        conn = get_conn()
-        pending = conn.execute("""
-            SELECT COUNT(*) as c FROM story_clusters sc
-            LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
-            WHERE (sc.source_count >= 2 OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))
-            AND EXISTS (
-                SELECT 1 FROM raw_items ri
-                WHERE ri.cluster_id = sc.id
-                AND ri.original_headline = sc.rewritten_headline
-            )
-        """).fetchone()["c"]
-        conn.close()
-        boot_state["pending"] = pending
-        if initial_pending is None:
-            initial_pending = pending if pending > 0 else 1
-        if pending == 0:
-            break
-        boot_state["rewriting_progress"] = 1 - (pending / initial_pending)
-        log.info(f"Boot rewrite pass {i+1}: {pending} pending...")
-        prev_pending = pending
+    conn = get_conn()
+    pending = conn.execute("""
+        SELECT COUNT(*) as c FROM story_clusters sc
+        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+        WHERE (sc.source_count >= 2 OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))
+        AND EXISTS (
+            SELECT 1 FROM raw_items ri
+            WHERE ri.cluster_id = sc.id
+            AND ri.original_headline = sc.rewritten_headline
+        )
+    """).fetchone()["c"]
+    conn.close()
+    boot_state["pending"] = pending
+    if pending > 0:
+        log.info(f"Boot rewrite: {pending} pending, running single pass (scheduler handles rest)")
         try:
             await rewrite_pending()
         except Exception as e:
             log.warning(f"Boot rewrite error: {e}")
-        # Check if progress was made
-        conn = get_conn()
-        new_pending = conn.execute("""
-            SELECT COUNT(*) as c FROM story_clusters sc
-            WHERE sc.source_count >= 2
-            AND EXISTS (
-                SELECT 1 FROM raw_items ri
-                WHERE ri.cluster_id = sc.id
-                AND ri.original_headline = sc.rewritten_headline
-            )
-        """).fetchone()["c"]
-        conn.close()
-        if new_pending >= prev_pending:
-            consecutive_failures += 1
-            if consecutive_failures >= 3:
-                backoff = min(30 * consecutive_failures, 300)
-                log.warning(f"Rewrite API unavailable, backing off {backoff}s (attempt {consecutive_failures})")
-                boot_state["detail"] = f"API backoff {backoff}s"
-                await asyncio.sleep(backoff)
-        else:
-            consecutive_failures = 0
-
-    conn = get_conn()
-    boot_state["clusters"] = conn.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]
-    conn.close()
-    boot_state["pending"] = 0
     boot_state["rewriting_progress"] = 1
 
     # Merge duplicate clusters before going live
