@@ -74,125 +74,18 @@ boot_state = {
 _boot_task = None
 
 async def startup_backfill():
-    """Walk through 3 boot phases: polling, clustering, rewriting."""
+    """Skip straight to ready on deploy — full boot only via manual reboot in CP."""
     conn = get_conn()
     cluster_count = conn.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]
     conn.close()
 
-    if cluster_count >= 100:
-        log.info(f"Startup: {cluster_count} clusters found, skipping backfill")
-        boot_state["phase"] = "ready"
-        boot_state["clusters"] = cluster_count
-        boot_state["reference_progress"] = 1
-        boot_state["polling_progress"] = 1
-        boot_state["clustering_progress"] = 1
-        boot_state["rewriting_progress"] = 1
-        return
-
-    log.info(f"Startup: only {cluster_count} clusters, running backfill...")
-
-    # Phase 0: reference check — scrape editorial front pages
-    boot_state["phase"] = "reference_check"
-    boot_state["detail"] = ""
-    log.info("Boot phase 0 — reference check")
-
-    def ref_progress(done, total):
-        boot_state["reference_progress"] = done / total
-
-    try:
-        await run_reference_check(on_progress=ref_progress)
-    except Exception as e:
-        log.warning(f"Boot reference check error: {e}")
-    boot_state["reference_progress"] = 1
-
-    # Phase 1: polling — 3 passes of (poll_feeds + search_sweep)
-    # Progress is tracked per-feed across all 3 passes
-    boot_state["phase"] = "polling"
-    num_passes = 3
-    for i in range(num_passes):
-        boot_state["detail"] = f"Pass {i+1}/{num_passes}"
-        log.info(f"Boot phase 1 — polling pass {i+1}/{num_passes}")
-
-        def poll_progress(done, total, _pass=i):
-            # Each pass has poll_feeds portion (0-0.8) + search_sweep portion (0.8-1.0)
-            pass_frac = (_pass + (done / total) * 0.8) / num_passes
-            boot_state["polling_progress"] = min(pass_frac, 0.99)
-
-        def search_progress(done, total, _pass=i):
-            pass_frac = (_pass + 0.8 + (done / total) * 0.2) / num_passes
-            boot_state["polling_progress"] = min(pass_frac, 0.99)
-
-        try:
-            await poll_feeds(on_progress=poll_progress)
-        except Exception as e:
-            log.warning(f"Boot poll error: {e}")
-        try:
-            await search_sweep(on_progress=search_progress)
-        except Exception as e:
-            log.warning(f"Boot search error: {e}")
-    boot_state["polling_progress"] = 1
-
-    # Phase 2: clustering — backfill_48h with per-feed progress
-    boot_state["phase"] = "clustering"
-    boot_state["detail"] = ""
-    log.info("Boot phase 2 — clustering (backfill_48h)")
-
-    def cluster_progress(done, total):
-        boot_state["clustering_progress"] = done / total
-        # Periodically update cluster count
-        if done % 10 == 0 or done == total:
-            try:
-                c = get_conn()
-                boot_state["clusters"] = c.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]
-                c.close()
-            except Exception:
-                pass
-
-    try:
-        await backfill_48h(on_progress=cluster_progress)
-    except Exception as e:
-        log.warning(f"Boot clustering error: {e}")
-    conn = get_conn()
-    boot_state["clusters"] = conn.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]
-    conn.close()
-    boot_state["clustering_progress"] = 1
-    log.info(f"Boot clustering done: {boot_state['clusters']} clusters")
-
-    # Phase 3: rewriting — track pending countdown
-    boot_state["phase"] = "rewriting"
-    boot_state["detail"] = ""
-    initial_pending = None
-    for i in range(20):
-        conn = get_conn()
-        pending = conn.execute("""
-            SELECT COUNT(*) as c FROM story_clusters sc
-            WHERE sc.source_count >= 2
-            AND EXISTS (
-                SELECT 1 FROM raw_items ri
-                WHERE ri.cluster_id = sc.id
-                AND ri.original_headline = sc.rewritten_headline
-            )
-        """).fetchone()["c"]
-        conn.close()
-        boot_state["pending"] = pending
-        if initial_pending is None:
-            initial_pending = pending if pending > 0 else 1
-        if pending == 0:
-            break
-        boot_state["rewriting_progress"] = 1 - (pending / initial_pending)
-        log.info(f"Boot rewrite pass {i+1}: {pending} pending...")
-        try:
-            await rewrite_pending()
-        except Exception as e:
-            log.warning(f"Boot rewrite error: {e}")
-
-    conn = get_conn()
-    boot_state["clusters"] = conn.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]
-    conn.close()
-    boot_state["pending"] = 0
-    boot_state["rewriting_progress"] = 1
+    log.info(f"Startup: {cluster_count} clusters found, skipping boot (use CP reboot for full rebuild)")
     boot_state["phase"] = "ready"
-    log.info(f"Boot complete: {boot_state['clusters']} clusters")
+    boot_state["clusters"] = cluster_count
+    boot_state["reference_progress"] = 1
+    boot_state["polling_progress"] = 1
+    boot_state["clustering_progress"] = 1
+    boot_state["rewriting_progress"] = 1
 
 
 async def _start_scheduler_after_boot():
@@ -223,7 +116,7 @@ async def lifespan(app: FastAPI):
     _boot_task = asyncio.create_task(startup_backfill())
     asyncio.create_task(_start_scheduler_after_boot())
 
-    log.info("WIRE started")
+    log.info("DINWIRE started")
     yield
     scheduler.shutdown(wait=False)
 
