@@ -136,6 +136,10 @@ VERSIONS = {
 }
 
 
+# The latest version is always the last key in VERSIONS
+LATEST_VERSION = list(VERSIONS.keys())[-1]
+
+
 # ── SQL builder functions ────────────────────────────────────────────────
 
 def _sql_quote(name: str) -> str:
@@ -176,7 +180,7 @@ _CACHE_TTL = 30
 
 
 def get_active_version() -> dict:
-    """Read the active algorithm version from the DB settings table. 30s TTL cache. Falls back to v1."""
+    """Read the active algorithm version from the DB settings table. 30s TTL cache. Falls back to latest."""
     now = time.time()
     if _cache["version_name"] and (now - _cache["loaded_at"]) < _CACHE_TTL:
         return VERSIONS[_cache["version_name"]]
@@ -185,12 +189,12 @@ def get_active_version() -> dict:
         conn = get_conn()
         row = conn.execute("SELECT value FROM settings WHERE key = 'algorithm_version'").fetchone()
         conn.close()
-        name = row["value"] if row else "v1"
+        name = row["value"] if row else LATEST_VERSION
     except Exception:
-        name = "v1"
+        name = LATEST_VERSION
 
     if name not in VERSIONS:
-        name = "v1"
+        name = LATEST_VERSION
 
     _cache["version_name"] = name
     _cache["loaded_at"] = now

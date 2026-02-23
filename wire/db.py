@@ -251,8 +251,10 @@ def init_db():
                 (name, sort_order, now, now)
             )
 
-    # Seed settings
-    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('algorithm_version', 'v1')")
+    # Seed settings — default to latest algorithm version
+    conn.execute("INSERT OR IGNORE INTO settings (key, value) VALUES ('algorithm_version', 'v2')")
+    # Upgrade existing installs still on v1
+    conn.execute("UPDATE settings SET value = 'v2' WHERE key = 'algorithm_version' AND value = 'v1'")
 
     # Seed feed_sources from feeds.yaml if empty
     src_count = conn.execute("SELECT COUNT(*) as c FROM feed_sources").fetchone()["c"]
