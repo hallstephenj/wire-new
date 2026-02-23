@@ -123,8 +123,9 @@ async def _rewrite_chunk(client, model, clusters):
 
 
 async def rewrite_pending():
-    """Batch rewrite and categorize clustered stories (source_count >= 2).
+    """Batch rewrite and categorize clustered stories.
 
+    Rewrites clusters with 2+ sources OR scoop-boosted clusters (any source count).
     Sends up to _PARALLEL_REQUESTS concurrent batches of _BATCH_CHUNK_SIZE clusters each.
     """
     cfg = load_config()
@@ -137,13 +138,14 @@ async def rewrite_pending():
     now = datetime.now(timezone.utc).isoformat()
 
     # Grab up to chunk_size * parallel_requests clusters per pass
+    # Include scoop-boosted clusters even if they only have 1 source
     total_limit = _BATCH_CHUNK_SIZE * _PARALLEL_REQUESTS
     rows = conn.execute("""
         SELECT sc.id, sc.rewritten_headline, sc.source_count
         FROM story_clusters sc
         LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
         WHERE sc.expires_at > ?
-        AND sc.source_count >= 2
+        AND (sc.source_count >= 2 OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))
         AND (co.locked IS NULL OR co.locked = 0)
         AND EXISTS (
             SELECT 1 FROM raw_items ri

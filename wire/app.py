@@ -133,7 +133,8 @@ async def startup_backfill():
         conn = get_conn()
         pending = conn.execute("""
             SELECT COUNT(*) as c FROM story_clusters sc
-            WHERE sc.source_count >= 2
+            LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+            WHERE (sc.source_count >= 2 OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))
             AND EXISTS (
                 SELECT 1 FROM raw_items ri
                 WHERE ri.cluster_id = sc.id
@@ -212,7 +213,7 @@ async def _start_scheduler_after_boot():
     scheduler.add_job(rewrite_pending, "interval", minutes=2, id="rewrite", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(cleanup_expired, "interval", hours=cfg["polling"]["cleanup_interval_hours"], id="cleanup")
     scheduler.add_job(run_reference_check, "cron", hour=6, id="reference_check")
-    scheduler.add_job(deduplicate_clusters, "interval", hours=1, id="dedup")
+    scheduler.add_job(deduplicate_clusters, "interval", minutes=30, id="dedup")
     if not scheduler.running:
         scheduler.start()
     log.info("Scheduler started (post-boot)")
@@ -391,8 +392,9 @@ async def river_status():
     raw_items = conn.execute("SELECT COUNT(*) as c FROM raw_items").fetchone()["c"]
     pending = conn.execute("""
         SELECT COUNT(*) as c FROM story_clusters sc
+        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
         WHERE sc.expires_at > ?
-        AND sc.source_count >= 2
+        AND (sc.source_count >= 2 OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))
         AND EXISTS (
             SELECT 1 FROM raw_items ri
             WHERE ri.cluster_id = sc.id

@@ -251,10 +251,13 @@ def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline:
         updates["primary_url"] = url
         updates["primary_source"] = source_name
 
-    # Update published_at if this item is earlier
-    if published_at:
+    # When primary source changes, use the new primary's published_at
+    # Otherwise only update if no published_at is set yet
+    if "primary_source" in updates and published_at:
+        updates["published_at"] = published_at
+    elif published_at:
         existing_pub = conn.execute("SELECT published_at FROM story_clusters WHERE id=?", (cluster_id,)).fetchone()["published_at"]
-        if existing_pub is None or published_at < existing_pub:
+        if existing_pub is None:
             updates["published_at"] = published_at
 
     set_clause = ", ".join(f"{k}=?" for k in updates)
@@ -268,12 +271,14 @@ def merge_existing_clusters(conn):
     Uses the active algorithm version's clustering thresholds.
     """
     algo = get_active_version()
-    merge_tfidf = algo.get("tfidf_threshold", 0.30) + 0.05  # slightly looser than assign since headlines are rewritten
-    merge_topic_tfidf = algo.get("topic_tfidf_threshold", 0.15)
+    # Merge thresholds are looser (lower) than assign thresholds because
+    # rewritten headlines are already normalized — easier to compare
+    merge_tfidf = algo.get("tfidf_threshold", 0.30) - 0.10
+    merge_topic_tfidf = algo.get("topic_tfidf_threshold", 0.15) - 0.05
     merge_topic_only = algo.get("topic_only_threshold", 1.0)
     merge_topic_overlap_min = algo.get("topic_overlap_min", 0.5)
-    merge_kw_tfidf = algo.get("keyword_tfidf_threshold", 0.10)
-    merge_min_kw = algo.get("min_keyword_overlap", 3)
+    merge_kw_tfidf = max(algo.get("keyword_tfidf_threshold", 0.10) - 0.05, 0.05)
+    merge_min_kw = max(algo.get("min_keyword_overlap", 3) - 1, 2)
 
     now = datetime.now(timezone.utc)
     rows = conn.execute(
