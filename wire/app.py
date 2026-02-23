@@ -240,7 +240,7 @@ async def lifespan(app: FastAPI):
     _boot_task = asyncio.create_task(startup_backfill())
     asyncio.create_task(_start_scheduler_after_boot())
 
-    log.info("DINWIRE started")
+    log.info("EDROWIRE started")
     yield
     scheduler.shutdown(wait=False)
 
