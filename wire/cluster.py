@@ -136,13 +136,16 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
         # ── Pass 2: Topic/entity overlap ─────────────────────────────────
         best_topic_idx = -1
         best_topic_score = 0.0
+        best_topic_shared = 0  # number of shared topics
         if new_topics:
             for i, ch in enumerate(cluster_headlines):
                 cluster_topics = _extract_topics(ch)
                 overlap = _topic_overlap_score(new_topics, cluster_topics)
+                shared = len(new_topics & cluster_topics)
                 if overlap > best_topic_score:
                     best_topic_score = overlap
                     best_topic_idx = i
+                    best_topic_shared = shared
 
         def _scoop_date_ok(candidate_idx):
             """Reject matches to scoop-boosted clusters if the incoming article predates the scoop."""
@@ -160,17 +163,18 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
             _add_to_cluster(conn, cluster_id, source_name, url, headline, category, published_at=published_at)
             return cluster_id
 
-        # Topic overlap with even weak TF-IDF is enough
-        # e.g. both mention "trump" + "tariff" with tfidf > topic_tfidf_threshold
-        if best_topic_score >= topic_overlap_min and best_tfidf_sim >= topic_tfidf_threshold and best_topic_idx >= 0 and _scoop_date_ok(best_topic_idx):
+        # Topic overlap with weak TF-IDF — requires 2+ shared topics to avoid
+        # single broad topic (e.g. "tariff") linking unrelated stories
+        if best_topic_score >= topic_overlap_min and best_topic_shared >= 2 and best_tfidf_sim >= topic_tfidf_threshold and best_topic_idx >= 0 and _scoop_date_ok(best_topic_idx):
             cluster_id = rows[best_topic_idx]["id"]
             ev("cluster_hit", headline=headline, matched=rows[best_topic_idx]["rewritten_headline"],
                similarity=round(best_tfidf_sim, 3), topic_overlap=round(best_topic_score, 2), method="topic+tfidf")
             _add_to_cluster(conn, cluster_id, source_name, url, headline, category, published_at=published_at)
             return cluster_id
 
-        # Strong topic overlap alone (2+ shared entities, very high overlap)
-        if best_topic_score >= topic_only_threshold and best_topic_idx >= 0 and _scoop_date_ok(best_topic_idx):
+        # Strong topic overlap alone — requires 2+ shared entities to prevent
+        # broad single-topic matches (e.g. "tariff" alone linking unrelated stories)
+        if best_topic_score >= topic_only_threshold and best_topic_shared >= 2 and best_topic_idx >= 0 and _scoop_date_ok(best_topic_idx):
             cluster_id = rows[best_topic_idx]["id"]
             ev("cluster_hit", headline=headline, matched=rows[best_topic_idx]["rewritten_headline"],
                topic_overlap=round(best_topic_score, 2), method="topic_only")
@@ -210,12 +214,12 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
     )
 
     # Auto-boost scoops/exclusives from top-tier sources
-    _maybe_scoop_boost(conn, cluster_id, headline, source_name, algo, now)
+    _maybe_scoop_boost(conn, cluster_id, headline, source_name, algo, now, published_at=published_at)
 
     return cluster_id
 
 
-def _maybe_scoop_boost(conn, cluster_id: str, headline: str, source_name: str, algo: dict, now):
+def _maybe_scoop_boost(conn, cluster_id: str, headline: str, source_name: str, algo: dict, now, published_at: str = None):
     """Auto-boost clusters from top-tier sources with scoop/exclusive indicators."""
     if not algo.get("scoop_enabled"):
         return
@@ -232,12 +236,15 @@ def _maybe_scoop_boost(conn, cluster_id: str, headline: str, source_name: str, a
     if not matched:
         return
 
+    # Use the article's published_at as scoop timestamp (not processing time)
+    # so follow-on coverage with later publish dates isn't incorrectly blocked
+    scoop_ts = published_at or now.isoformat()
     now_iso = now.isoformat()
     conn.execute("""
         INSERT INTO curation_overrides (cluster_id, boost, scoop_boosted_at, updated_at)
         VALUES (?, 1, ?, ?)
         ON CONFLICT(cluster_id) DO UPDATE SET boost=1, scoop_boosted_at=?, updated_at=?
-    """, (cluster_id, now_iso, now_iso, now_iso, now_iso))
+    """, (cluster_id, scoop_ts, now_iso, scoop_ts, now_iso))
     ev("scoop_boost", headline=headline, source=source_name, cluster_id=cluster_id[:8])
     log.info(f"Scoop boost: [{source_name}] {headline[:80]}")
 

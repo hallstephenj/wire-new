@@ -129,7 +129,7 @@ VERSIONS = {
             "Axios", "Politico", "The Information", "Semafor",
             "ProPublica", "The Atlantic", "404 Media",
         ],
-        "scoop_patterns": [r"(?i)\bscoop\b", r"(?i)\bexclusive\b"],
+        "scoop_patterns": [r"(?i)\bscoop\b", r"(?i)\bexclusive\b", r"(?i)^sources?\b"],
         "scoop_boost_hours": 4,
         "scoop_min_sources_after": 2,
     },

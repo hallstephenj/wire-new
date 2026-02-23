@@ -292,10 +292,12 @@ async def get_stories(
         where.append("sc.last_updated > ?")
         params.append(since)
 
-    # Sort precedence: BREAKING > pinned > boosted > normal > demoted
-    sort_prefix = """CASE WHEN COALESCE(co.breaking, 0) = 1 THEN 0
+    # Sort precedence: BREAKING > pinned > boosted (if recent) > normal > demoted
+    # Scoop boosts only get sort priority for the first N hours, then sort naturally
+    boost_hours = algo.get("scoop_boost_hours", 4)
+    sort_prefix = f"""CASE WHEN COALESCE(co.breaking, 0) = 1 THEN 0
                           WHEN COALESCE(co.pinned, 0) = 1 THEN 1
-                          WHEN COALESCE(co.boost, 0) > 0 THEN 2
+                          WHEN COALESCE(co.boost, 0) > 0 AND (co.scoop_boosted_at IS NULL OR co.scoop_boosted_at > datetime('now', '-{boost_hours} hours')) THEN 2
                           WHEN COALESCE(co.boost, 0) < 0 THEN 4
                           ELSE 3 END"""
     # Deprioritize "world" in the ALL view
@@ -313,7 +315,8 @@ async def get_stories(
             where.append(reputable_filter)
         order = f"{sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC"
     else:
-        order = f"{sort_prefix}, sc.published_at DESC"
+        # Ticker: pure chronological, no boost/pin/breaking reordering
+        order = "sc.published_at DESC"
     where_clause = " AND ".join(where)
 
     rows = conn.execute(f"""
@@ -878,10 +881,11 @@ async def river_stories(
         where.append("COALESCE(co.category_override, sc.category) = ?")
         params.append(category)
 
-    # Same sort precedence as homepage: BREAKING > pinned > boosted > normal > demoted
-    sort_prefix = """CASE WHEN COALESCE(co.breaking, 0) = 1 THEN 0
+    # Same sort precedence as homepage: BREAKING > pinned > boosted (if recent) > normal > demoted
+    boost_hours = algo.get("scoop_boost_hours", 4)
+    sort_prefix = f"""CASE WHEN COALESCE(co.breaking, 0) = 1 THEN 0
                           WHEN COALESCE(co.pinned, 0) = 1 THEN 1
-                          WHEN COALESCE(co.boost, 0) > 0 THEN 2
+                          WHEN COALESCE(co.boost, 0) > 0 AND (co.scoop_boosted_at IS NULL OR co.scoop_boosted_at > datetime('now', '-{boost_hours} hours')) THEN 2
                           WHEN COALESCE(co.boost, 0) < 0 THEN 4
                           ELSE 3 END"""
     # Deprioritize "world" in the ALL view
@@ -898,7 +902,8 @@ async def river_stories(
             where.append(reputable_filter)
         order = f"{sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC"
     else:
-        order = f"{sort_prefix}, sc.published_at DESC"
+        # Ticker: pure chronological, no boost/pin/breaking reordering
+        order = "sc.published_at DESC"
 
     where_clause = " AND ".join(where)
 
