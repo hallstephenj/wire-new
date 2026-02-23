@@ -235,7 +235,7 @@ async def poll_feeds(on_progress=None):
 
 async def _poll_single_feed(url: str, name: str, category: str) -> int:
     async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-        resp = await client.get(url, headers={"User-Agent": "WIRE/1.0"})
+        resp = await client.get(url, headers={"User-Agent": "DINWIRE/1.0"})
         resp.raise_for_status()
 
     feed = feedparser.parse(resp.text)
