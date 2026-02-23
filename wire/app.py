@@ -16,7 +16,7 @@ from wire.ingest import poll_feeds, search_sweep, backfill_48h, invalidate_filte
 from wire.rewrite import rewrite_pending
 from wire.cluster import assign_cluster
 from wire.events import snapshot as events_snapshot
-from wire.scores import all_scores
+from wire.scores import all_scores, get_score
 from wire.reference import run_reference_check
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -503,7 +503,25 @@ async def scores():
     data = all_scores()
     return {"scores": [{"source": name, **breakdown} for name, breakdown in data.items()]}
 
-VALID_CATEGORIES = {"tech", "markets", "politics", "world", "general"}
+import time as _time
+_categories_cache = {"data": None, "loaded_at": 0}
+_CATEGORIES_CACHE_TTL = 30
+
+def _get_valid_categories():
+    now = _time.time()
+    if _categories_cache["data"] and (now - _categories_cache["loaded_at"]) < _CATEGORIES_CACHE_TTL:
+        return _categories_cache["data"]
+    conn = get_conn()
+    rows = conn.execute("SELECT name FROM categories WHERE enabled=1").fetchall()
+    conn.close()
+    cats = {r["name"] for r in rows} if rows else {"tech", "markets", "politics", "world", "general"}
+    _categories_cache["data"] = cats
+    _categories_cache["loaded_at"] = now
+    return cats
+
+def _invalidate_categories_cache():
+    _categories_cache["data"] = None
+    _categories_cache["loaded_at"] = 0
 
 def _log_curation(conn, action, cluster_id, detail):
     """Insert a curation log entry, auto-including the cluster headline."""
@@ -547,8 +565,9 @@ async def edit_category(request: Request):
     body = await request.json()
     cluster_id = body["cluster_id"]
     category = body["category"].strip().lower()
-    if category not in VALID_CATEGORIES:
-        return JSONResponse({"error": f"invalid category, must be one of: {', '.join(sorted(VALID_CATEGORIES))}"}, status_code=400)
+    valid = _get_valid_categories()
+    if category not in valid:
+        return JSONResponse({"error": f"invalid category, must be one of: {', '.join(sorted(valid))}"}, status_code=400)
 
     conn = get_conn()
     old = conn.execute("SELECT category FROM story_clusters WHERE id=?", (cluster_id,)).fetchone()
@@ -1346,6 +1365,175 @@ async def reference_check_log(
     total = conn.execute(f"SELECT COUNT(*) as c FROM reference_check_log{where_clause}", params).fetchone()["c"]
     conn.close()
     return {"entries": [dict(r) for r in rows], "total": total}
+
+
+# ── Feed Source CRUD ──────────────────────────────────────────────────
+
+@app.get("/api/river/sources")
+async def list_sources(category: str | None = None):
+    conn = get_conn()
+    where = []
+    params = []
+    if category:
+        where.append("category = ?")
+        params.append(category)
+    where_clause = (" WHERE " + " AND ".join(where)) if where else ""
+    rows = conn.execute(f"SELECT * FROM feed_sources{where_clause} ORDER BY category, name", params).fetchall()
+    conn.close()
+    sources = []
+    for r in rows:
+        d = dict(r)
+        d["score"] = get_score(r["name"])
+        sources.append(d)
+    return {"sources": sources}
+
+
+@app.post("/api/river/sources")
+async def create_source(request: Request):
+    body = await request.json()
+    name = body.get("name", "").strip()
+    url = body.get("url", "").strip()
+    category = body.get("category", "").strip().lower()
+    if not name or not url or not category:
+        return JSONResponse({"error": "name, url, and category required"}, status_code=400)
+    valid = _get_valid_categories()
+    if category not in valid:
+        return JSONResponse({"error": f"invalid category, must be one of: {', '.join(sorted(valid))}"}, status_code=400)
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_conn()
+    try:
+        cur = conn.execute(
+            "INSERT INTO feed_sources (name, url, category, enabled, created_at, updated_at) VALUES (?,?,?,1,?,?)",
+            (name, url, category, now, now)
+        )
+        source_id = cur.lastrowid
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        return JSONResponse({"error": f"URL already exists: {e}"}, status_code=400)
+    conn.close()
+    return {"status": "ok", "id": source_id}
+
+
+@app.put("/api/river/sources/{source_id}")
+async def update_source(source_id: int, request: Request):
+    body = await request.json()
+    conn = get_conn()
+    existing = conn.execute("SELECT * FROM feed_sources WHERE id=?", (source_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return JSONResponse({"error": "source not found"}, status_code=404)
+
+    name = body.get("name", existing["name"])
+    url = body.get("url", existing["url"])
+    category = body.get("category", existing["category"])
+    enabled = body.get("enabled", existing["enabled"])
+
+    if "category" in body:
+        valid = _get_valid_categories()
+        if category not in valid:
+            conn.close()
+            return JSONResponse({"error": f"invalid category"}, status_code=400)
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "UPDATE feed_sources SET name=?, url=?, category=?, enabled=?, updated_at=? WHERE id=?",
+        (name, url, category, int(enabled), now, source_id)
+    )
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+
+@app.delete("/api/river/sources/{source_id}")
+async def delete_source(source_id: int):
+    conn = get_conn()
+    existing = conn.execute("SELECT * FROM feed_sources WHERE id=?", (source_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return JSONResponse({"error": "source not found"}, status_code=404)
+    conn.execute("DELETE FROM feed_sources WHERE id=?", (source_id,))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+
+# ── Category CRUD ────────────────────────────────────────────────────
+
+@app.get("/api/river/categories")
+async def list_categories():
+    conn = get_conn()
+    rows = conn.execute("SELECT * FROM categories ORDER BY sort_order, name").fetchall()
+    conn.close()
+    return {"categories": [dict(r) for r in rows]}
+
+
+@app.post("/api/river/categories")
+async def create_category(request: Request):
+    body = await request.json()
+    name = body.get("name", "").strip().lower()
+    if not name:
+        return JSONResponse({"error": "name required"}, status_code=400)
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn = get_conn()
+    max_order = conn.execute("SELECT MAX(sort_order) as m FROM categories").fetchone()["m"] or 0
+    try:
+        cur = conn.execute(
+            "INSERT INTO categories (name, sort_order, enabled, created_at, updated_at) VALUES (?,?,1,?,?)",
+            (name, max_order + 1, now, now)
+        )
+        cat_id = cur.lastrowid
+        conn.commit()
+    except Exception:
+        conn.close()
+        return JSONResponse({"error": "category already exists"}, status_code=400)
+    conn.close()
+    _invalidate_categories_cache()
+    return {"status": "ok", "id": cat_id}
+
+
+@app.put("/api/river/categories/{cat_id}")
+async def update_category(cat_id: int, request: Request):
+    body = await request.json()
+    conn = get_conn()
+    existing = conn.execute("SELECT * FROM categories WHERE id=?", (cat_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return JSONResponse({"error": "category not found"}, status_code=404)
+
+    name = body.get("name", existing["name"]).strip().lower()
+    sort_order = body.get("sort_order", existing["sort_order"])
+    enabled = body.get("enabled", existing["enabled"])
+
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute(
+        "UPDATE categories SET name=?, sort_order=?, enabled=?, updated_at=? WHERE id=?",
+        (name, int(sort_order), int(enabled), now, cat_id)
+    )
+    conn.commit()
+    conn.close()
+    _invalidate_categories_cache()
+    return {"status": "ok"}
+
+
+@app.delete("/api/river/categories/{cat_id}")
+async def delete_category(cat_id: int):
+    conn = get_conn()
+    existing = conn.execute("SELECT * FROM categories WHERE id=?", (cat_id,)).fetchone()
+    if not existing:
+        conn.close()
+        return JSONResponse({"error": "category not found"}, status_code=404)
+    refs = conn.execute("SELECT COUNT(*) as c FROM feed_sources WHERE category=?", (existing["name"],)).fetchone()["c"]
+    if refs > 0:
+        conn.close()
+        return JSONResponse({"error": f"cannot delete: {refs} source(s) still use this category"}, status_code=400)
+    conn.execute("DELETE FROM categories WHERE id=?", (cat_id,))
+    conn.commit()
+    conn.close()
+    _invalidate_categories_cache()
+    return {"status": "ok"}
 
 
 _backfill_running = False

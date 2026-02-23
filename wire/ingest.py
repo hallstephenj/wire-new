@@ -188,11 +188,24 @@ def parse_published(entry) -> str:
         return datetime(*entry.updated_parsed[:6], tzinfo=timezone.utc).isoformat()
     return datetime.now(timezone.utc).isoformat()
 
-async def poll_feeds(on_progress=None):
+def _load_feeds_from_db():
+    """Load enabled feed sources from DB, falling back to YAML if table is empty."""
+    conn = get_conn()
+    try:
+        rows = conn.execute("SELECT name, url, category FROM feed_sources WHERE enabled=1").fetchall()
+    except Exception:
+        rows = []
+    conn.close()
+    if rows:
+        return [(r["category"], {"name": r["name"], "url": r["url"]}) for r in rows]
+    # Fallback to YAML
     feeds_cfg = load_feeds()
+    return [(cat, f) for cat, feeds in feeds_cfg["feeds"].items() for f in feeds]
+
+async def poll_feeds(on_progress=None):
     log.info("Polling RSS feeds...")
     ev("ingest_start", job="rss")
-    all_feeds = [(cat, f) for cat, feeds in feeds_cfg["feeds"].items() for f in feeds]
+    all_feeds = _load_feeds_from_db()
     total = len(all_feeds)
     completed = 0
     count = 0
@@ -410,10 +423,9 @@ async def backfill_48h(on_progress=None):
             for time_scope in ["when:1d", "when:2d", "when:3d"]:
                 url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}+{time_scope}&hl=en-US&gl=US&ceid=US:en"
                 ops.append((url, "Google News", category))
-    feeds_cfg = load_feeds()
-    for category, feeds in feeds_cfg["feeds"].items():
-        for feed in feeds:
-            ops.append((feed["url"], feed["name"], category))
+    db_feeds = _load_feeds_from_db()
+    for category, feed in db_feeds:
+        ops.append((feed["url"], feed["name"], category))
     for idx, (url, name, category) in enumerate(ops):
         try:
             n = await _poll_single_feed(url, name, category)

@@ -1030,14 +1030,227 @@ a:hover { text-decoration: underline; }
 
 .config-set:hover { background: #1a1400; }
 
+/* ══════════════════════════════════════════════════════════════════
+   TAB: SOURCES
+   ══════════════════════════════════════════════════════════════════ */
+.sources-layout {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    width: 100%;
+    overflow: hidden;
+}
+
+.sources-sidebar {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid #1a1a1a;
+}
+
+.sources-main {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.sources-cat-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    cursor: pointer;
+    color: #888;
+    border: none;
+    border-bottom: 1px solid #111;
+    background: transparent;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    width: 100%;
+    text-align: left;
+}
+
+.sources-cat-btn:hover { color: #ccc; background: #111; }
+.sources-cat-btn.active { color: #ffb000; background: #111; }
+
+.sources-cat-badge {
+    font-size: 9px;
+    color: #555;
+    font-weight: 400;
+}
+
+.sources-cat-btn.active .sources-cat-badge { color: #886000; }
+
+.source-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 0;
+    border-bottom: 1px solid #111;
+    font-size: 10px;
+}
+
+.source-row.disabled { opacity: 0.4; }
+
+.source-name { color: #ccc; font-weight: 700; min-width: 120px; }
+.source-url { flex: 1; color: #555; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+.source-cat-badge {
+    font-size: 8px;
+    padding: 1px 5px;
+    letter-spacing: 1px;
+    font-weight: 700;
+    color: #888;
+    border: 1px solid #333;
+    white-space: nowrap;
+}
+.source-score {
+    font-size: 9px;
+    color: #888;
+    min-width: 30px;
+    text-align: right;
+}
+
+.source-toggle {
+    padding: 2px 6px;
+    cursor: pointer;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.source-toggle.on { color: #4a9e4a; border-color: #2a5a2a; }
+.source-toggle.off { color: #e04040; border-color: #6e2a2a; }
+
+.source-del {
+    padding: 2px 5px;
+    cursor: pointer;
+    color: #555;
+    border: 1px solid #222;
+    background: transparent;
+    font-family: inherit;
+    font-size: 8px;
+}
+
+.source-del:hover { color: #e04040; border-color: #e04040; }
+
+.source-add-form {
+    padding: 8px 0;
+    border-top: 1px solid #1a1a1a;
+    margin-top: 6px;
+}
+
+.source-add-form input, .source-add-form select {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 10px;
+    padding: 3px 6px;
+    width: 100%;
+    margin-bottom: 4px;
+}
+
+.source-add-buttons {
+    display: flex;
+    gap: 4px;
+    margin-top: 4px;
+}
+
+.cat-add-form {
+    padding: 8px 12px;
+    border-top: 1px solid #1a1a1a;
+    margin-top: auto;
+    display: flex;
+    gap: 4px;
+}
+
+.cat-add-form input {
+    background: #111;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: inherit;
+    font-size: 10px;
+    padding: 3px 6px;
+    flex: 1;
+}
+
+/* ── Category Management (System tab) ────────────────────────────── */
+.cat-mgmt-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    border-bottom: 1px solid #111;
+    font-size: 10px;
+}
+
+.cat-mgmt-name { color: #ccc; font-weight: 700; flex: 1; }
+.cat-mgmt-order { color: #555; font-size: 9px; }
+
 /* ── Responsive ──────────────────────────────────────────────────── */
 @media (max-width: 1100px) {
     .stories-layout { grid-template-columns: 1fr; }
     .stories-sidebar { max-height: 300px; border-top: 1px solid #1a1a1a; }
     .filters-layout { grid-template-columns: 1fr; }
     .filters-log-pane { border-top: 1px solid #1a1a1a; }
+    .references-layout { grid-template-columns: 1fr; }
+    .references-sites-pane, .references-gaps-pane { border-right: none; border-bottom: 1px solid #1a1a1a; max-height: 350px; }
+    .sources-layout { grid-template-columns: 1fr; }
+    .sources-sidebar { border-right: none; border-bottom: 1px solid #1a1a1a; max-height: 200px; }
     .system-layout { grid-template-columns: 1fr; }
     .system-col { border-right: none; border-bottom: 1px solid #1a1a1a; max-height: 400px; }
+}
+
+@media (max-width: 768px) {
+    /* Top bar: stack vertically */
+    .top-bar { flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+    .logo { font-size: 16px; letter-spacing: 2px; }
+    .logo-sub { font-size: 10px; letter-spacing: 1px; }
+
+    /* Primary tabs: scroll horizontally */
+    .primary-tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .primary-tab { padding: 8px 12px; font-size: 10px; letter-spacing: 1px; white-space: nowrap; flex-shrink: 0; }
+
+    /* Tab content: fill remaining height, allow scrolling */
+    .tab-content { height: auto; min-height: 0; flex: 1; overflow-y: auto; }
+    .tab-content.active { flex-direction: column; }
+
+    /* Stories toolbar: wrap category tabs */
+    .stories-toolbar { flex-wrap: wrap; gap: 4px; padding: 6px 8px; }
+    .stories-toolbar .tabs { flex-wrap: wrap; }
+
+    /* All grid layouts single-column */
+    .stories-layout, .filters-layout, .references-layout, .sources-layout, .system-layout {
+        grid-template-columns: 1fr;
+        overflow-y: auto;
+    }
+    .stories-sidebar { max-height: 250px; border-top: 1px solid #1a1a1a; }
+    .filters-log-pane { border-top: 1px solid #1a1a1a; }
+    .references-sites-pane, .references-gaps-pane {
+        border-right: none; border-bottom: 1px solid #1a1a1a; max-height: 300px;
+    }
+    .sources-sidebar { border-right: none; border-bottom: 1px solid #1a1a1a; max-height: 180px; }
+    .system-col { border-right: none; border-bottom: 1px solid #1a1a1a; max-height: none; }
+
+    /* Panels: let them size naturally */
+    .panel-body { padding: 8px; }
+    .panel-header { padding: 6px 8px; }
+
+    /* Source/ref rows: allow wrapping */
+    .ref-site-row, .source-row { flex-wrap: wrap; }
+    .ref-site-url, .source-url { width: 100%; flex: none; }
+
+    /* Story curation bar: wrap buttons */
+    .curation-bar { flex-wrap: wrap; }
+
+    /* Config row inputs */
+    .config-label { min-width: 80px; font-size: 9px; }
+    .config-input { width: 80px; }
 }
 </style>
 </head>
@@ -1059,6 +1272,7 @@ a:hover { text-decoration: underline; }
     <button class="primary-tab active" data-tab="stories">STORIES</button>
     <button class="primary-tab" data-tab="filters">FILTERS <span class="tab-badge" id="tab-badge-filters"></span></button>
     <button class="primary-tab" data-tab="references">REFERENCES <span class="tab-badge" id="tab-badge-references"></span></button>
+    <button class="primary-tab" data-tab="sources">SOURCES <span class="tab-badge" id="tab-badge-sources"></span></button>
     <button class="primary-tab" data-tab="system">SYSTEM <span class="tab-badge" id="tab-badge-system"></span></button>
 </div>
 
@@ -1183,7 +1397,37 @@ a:hover { text-decoration: underline; }
 </div>
 
 <!-- ══════════════════════════════════════════════════════════════════
-     TAB 4: SYSTEM
+     TAB 4: SOURCES
+     ══════════════════════════════════════════════════════════════════ -->
+<div class="tab-content" id="tab-sources">
+    <div class="sources-layout">
+        <!-- Left: Category Sidebar -->
+        <div class="sources-sidebar">
+            <div class="panel-header">CATEGORIES</div>
+            <div class="panel-body" id="sources-cat-list" style="flex:1;overflow-y:auto;"></div>
+            <div class="cat-add-form">
+                <input type="text" id="sources-cat-add-name" placeholder="New category...">
+                <button class="action-btn" onclick="addCategory()" style="font-size:9px;padding:3px 8px;">ADD</button>
+            </div>
+        </div>
+        <!-- Right: Source List -->
+        <div class="sources-main">
+            <div class="panel-header">FEED SOURCES <span id="sources-count" style="color:#888;font-weight:400;"></span></div>
+            <div class="panel-body" id="sources-list" style="flex:1;overflow-y:auto;"></div>
+            <div class="source-add-form" style="padding:8px 12px;">
+                <input type="text" id="source-add-name" placeholder="Source name...">
+                <input type="text" id="source-add-url" placeholder="Feed URL...">
+                <select id="source-add-category"></select>
+                <div class="source-add-buttons">
+                    <button class="action-btn" onclick="addSource()" style="font-size:9px;padding:3px 8px;">ADD SOURCE</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     TAB 5: SYSTEM
      ══════════════════════════════════════════════════════════════════ -->
 <div class="tab-content" id="tab-system">
     <div class="system-layout">
@@ -1294,6 +1538,16 @@ a:hover { text-decoration: underline; }
                     </div>
                 </div>
             </div>
+            <div class="panel">
+                <div class="panel-header">CATEGORIES</div>
+                <div class="panel-body">
+                    <div id="system-categories-list"></div>
+                    <div class="config-row" style="margin-top:8px;">
+                        <input class="config-input" id="system-cat-add-name" type="text" placeholder="New category..." style="width:140px;">
+                        <button class="config-set" onclick="addCategoryFromSystem()">ADD</button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -1327,8 +1581,12 @@ document.querySelectorAll('#primary-tabs .primary-tab').forEach(btn => {
             fetchRefSites();
             fetchRefGaps();
             fetchRefLog();
+        } else if (activeTab === 'sources') {
+            fetchSources();
+            fetchCategories();
         } else if (activeTab === 'system') {
             fetchEvents();
+            fetchSystemCategories();
         }
     });
 });
@@ -2314,6 +2572,197 @@ function renderRefGaps(entries, total) {
         <span>${refGapsPage + 1} / ${totalPages || 1}</span>
         <button ${refGapsPage >= totalPages - 1 ? 'disabled' : ''} onclick="refGapsPage++; fetchRefGaps();">NEXT</button>
     ` : '';
+}
+
+// ── Sources ──────────────────────────────────────────────────────────
+let sourcesFilter = null; // null = ALL
+let categoriesData = [];
+
+async function fetchCategories() {
+    try {
+        const resp = await fetch('/api/river/categories');
+        const data = await resp.json();
+        categoriesData = data.categories;
+        renderCategorySidebar(categoriesData);
+        populateCategoryDropdown(categoriesData);
+    } catch (e) {
+        console.error('Categories fetch error:', e);
+    }
+}
+
+function renderCategorySidebar(cats) {
+    const container = document.getElementById('sources-cat-list');
+    const allActive = sourcesFilter === null ? ' active' : '';
+    let html = `<button class="sources-cat-btn${allActive}" onclick="sourcesFilter=null; fetchSources(); renderCategorySidebar(categoriesData);">ALL</button>`;
+    for (const cat of cats) {
+        const active = sourcesFilter === cat.name ? ' active' : '';
+        const disabledStyle = cat.enabled ? '' : ' style="opacity:0.4;"';
+        html += `<button class="sources-cat-btn${active}"${disabledStyle} onclick="sourcesFilter='${esc(cat.name)}'; fetchSources(); renderCategorySidebar(categoriesData);">
+            ${esc(cat.name.toUpperCase())}
+            <span class="sources-cat-badge" id="cat-count-${esc(cat.name)}"></span>
+        </button>`;
+    }
+    container.innerHTML = html;
+}
+
+function populateCategoryDropdown(cats) {
+    const sel = document.getElementById('source-add-category');
+    sel.innerHTML = cats.filter(c => c.enabled).map(c =>
+        `<option value="${esc(c.name)}">${esc(c.name)}</option>`
+    ).join('');
+}
+
+async function fetchSources() {
+    try {
+        const params = new URLSearchParams();
+        if (sourcesFilter) params.set('category', sourcesFilter);
+        const resp = await fetch(`/api/river/sources?${params}`);
+        const data = await resp.json();
+        renderSources(data.sources);
+        updateCategoryCounts(data.sources);
+    } catch (e) {
+        console.error('Sources fetch error:', e);
+    }
+}
+
+function updateCategoryCounts(sources) {
+    // Count sources per category from full list (only when showing ALL)
+    if (sourcesFilter === null) {
+        const counts = {};
+        for (const s of sources) {
+            counts[s.category] = (counts[s.category] || 0) + 1;
+        }
+        for (const cat of categoriesData) {
+            const el = document.getElementById(`cat-count-${cat.name}`);
+            if (el) el.textContent = counts[cat.name] || 0;
+        }
+    }
+    document.getElementById('sources-count').textContent = `(${sources.length})`;
+    document.getElementById('tab-badge-sources').textContent = sources.length || '';
+}
+
+function renderSources(sources) {
+    const container = document.getElementById('sources-list');
+    container.innerHTML = sources.map(s => {
+        const onOff = s.enabled ? 'on' : 'off';
+        const disabledClass = s.enabled ? '' : ' disabled';
+        const scoreTotal = s.score ? s.score.total : '--';
+        return `<div class="source-row${disabledClass}">
+            <span class="source-name">${esc(s.name)}</span>
+            <span class="source-url" title="${esc(s.url)}">${esc(s.url)}</span>
+            <span class="source-cat-badge">${esc(s.category.toUpperCase())}</span>
+            <span class="source-score">${scoreTotal}</span>
+            <button class="source-toggle ${onOff}" onclick="toggleSource(${s.id}, ${s.enabled ? 0 : 1})">${onOff.toUpperCase()}</button>
+            <button class="source-del" onclick="deleteSource(${s.id})" title="Delete source">&times;</button>
+        </div>`;
+    }).join('');
+}
+
+async function toggleSource(id, enabled) {
+    await fetch(`/api/river/sources/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+    });
+    fetchSources();
+}
+
+async function deleteSource(id) {
+    if (!confirm('Delete this feed source?')) return;
+    await fetch(`/api/river/sources/${id}`, { method: 'DELETE' });
+    fetchSources();
+}
+
+async function addSource() {
+    const name = document.getElementById('source-add-name').value.trim();
+    const url = document.getElementById('source-add-url').value.trim();
+    const category = document.getElementById('source-add-category').value;
+    if (!name || !url) { alert('Name and URL required'); return; }
+
+    const resp = await fetch('/api/river/sources', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, url, category }),
+    });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    document.getElementById('source-add-name').value = '';
+    document.getElementById('source-add-url').value = '';
+    fetchSources();
+}
+
+async function addCategory() {
+    const input = document.getElementById('sources-cat-add-name');
+    const name = input.value.trim();
+    if (!name) return;
+
+    const resp = await fetch('/api/river/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+    });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    input.value = '';
+    fetchCategories();
+}
+
+// ── System Tab: Category Management ──────────────────────────────────
+async function fetchSystemCategories() {
+    try {
+        const resp = await fetch('/api/river/categories');
+        const data = await resp.json();
+        renderSystemCategories(data.categories);
+    } catch (e) {
+        console.error('System categories fetch error:', e);
+    }
+}
+
+function renderSystemCategories(cats) {
+    const container = document.getElementById('system-categories-list');
+    container.innerHTML = cats.map(c => {
+        const onOff = c.enabled ? 'on' : 'off';
+        const disabledStyle = c.enabled ? '' : ' style="opacity:0.4;"';
+        return `<div class="cat-mgmt-row"${disabledStyle}>
+            <span class="cat-mgmt-name">${esc(c.name)}</span>
+            <span class="cat-mgmt-order">#${c.sort_order}</span>
+            <button class="source-toggle ${onOff}" onclick="toggleSystemCategory(${c.id}, ${c.enabled ? 0 : 1})">${onOff.toUpperCase()}</button>
+            <button class="source-del" onclick="deleteSystemCategory(${c.id})" title="Delete category">&times;</button>
+        </div>`;
+    }).join('');
+}
+
+async function toggleSystemCategory(id, enabled) {
+    await fetch(`/api/river/categories/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled }),
+    });
+    fetchSystemCategories();
+}
+
+async function deleteSystemCategory(id) {
+    if (!confirm('Delete this category?')) return;
+    const resp = await fetch(`/api/river/categories/${id}`, { method: 'DELETE' });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    fetchSystemCategories();
+}
+
+async function addCategoryFromSystem() {
+    const input = document.getElementById('system-cat-add-name');
+    const name = input.value.trim();
+    if (!name) return;
+
+    const resp = await fetch('/api/river/categories', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+    });
+    const data = await resp.json();
+    if (data.error) { alert(data.error); return; }
+    input.value = '';
+    fetchSystemCategories();
 }
 
 function switchToStory(clusterId) {

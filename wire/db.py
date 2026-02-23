@@ -1,7 +1,7 @@
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
-from wire.config import load_config
+from wire.config import load_config, load_feeds
 
 _DB_PATH = None
 
@@ -140,6 +140,25 @@ def init_db():
     );
     CREATE INDEX IF NOT EXISTS idx_ref_log_checked ON reference_check_log(checked_at DESC);
     CREATE INDEX IF NOT EXISTS idx_ref_log_site ON reference_check_log(site_id);
+
+    CREATE TABLE IF NOT EXISTS feed_sources (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        url TEXT NOT NULL UNIQUE,
+        category TEXT NOT NULL,
+        enabled INTEGER DEFAULT 1,
+        created_at TEXT,
+        updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        sort_order INTEGER DEFAULT 0,
+        enabled INTEGER DEFAULT 1,
+        created_at TEXT,
+        updated_at TEXT
+    );
     """)
     # Migration: add published_at to story_clusters if missing
     cols = [r[1] for r in conn.execute("PRAGMA table_info(story_clusters)").fetchall()]
@@ -212,6 +231,32 @@ def init_db():
                 "INSERT INTO reference_sites (name, url, parser, enabled, max_headlines, created_at, updated_at) VALUES (?,?,?,1,?,?,?)",
                 (name, url, parser, max_hl, now, now)
             )
+
+    # Seed categories if empty
+    cat_count = conn.execute("SELECT COUNT(*) as c FROM categories").fetchone()["c"]
+    if cat_count == 0:
+        now = datetime.now(timezone.utc).isoformat()
+        seed_cats = [("tech", 0), ("markets", 1), ("politics", 2), ("world", 3), ("general", 4)]
+        for name, sort_order in seed_cats:
+            conn.execute(
+                "INSERT INTO categories (name, sort_order, enabled, created_at, updated_at) VALUES (?,?,1,?,?)",
+                (name, sort_order, now, now)
+            )
+
+    # Seed feed_sources from feeds.yaml if empty
+    src_count = conn.execute("SELECT COUNT(*) as c FROM feed_sources").fetchone()["c"]
+    if src_count == 0:
+        now = datetime.now(timezone.utc).isoformat()
+        try:
+            feeds_cfg = load_feeds()
+            for category, feeds in feeds_cfg.get("feeds", {}).items():
+                for feed in feeds:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO feed_sources (name, url, category, enabled, created_at, updated_at) VALUES (?,?,?,1,?,?)",
+                        (feed["name"], feed["url"], category, now, now)
+                    )
+        except Exception:
+            pass
 
     conn.commit()
     conn.close()
