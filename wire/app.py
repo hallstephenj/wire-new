@@ -410,6 +410,12 @@ async def audit_data():
 
     reputable_filter = f"""(SELECT COUNT(DISTINCT cs2.source_name) FROM cluster_sources cs2
         WHERE cs2.cluster_id = sc.id AND cs2.source_name IN {reputable_sources_sql}) >= {min_reputable}"""
+    if algo.get("scoop_enabled"):
+        reputable_clause = f"({reputable_filter} OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))"
+    else:
+        reputable_clause = reputable_filter
+    general_clause = "AND COALESCE(co.category_override, sc.category) != 'general'" if algo.get("general_exclusion", True) else ""
+    world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if algo.get("world_deprio", True) else "0"
 
     top_rows = conn.execute(f"""
         SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
@@ -421,8 +427,9 @@ async def audit_data():
         LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
         WHERE sc.expires_at > ?
           AND (co.hidden IS NULL OR co.hidden = 0)
-          AND {reputable_filter}
-        ORDER BY {sort_prefix}, {hot_score} DESC, sc.published_at DESC
+          AND {reputable_clause}
+          {general_clause}
+        ORDER BY {sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC
         LIMIT 5
     """, (now,)).fetchall()
     top_stories = _enrich(top_rows)
