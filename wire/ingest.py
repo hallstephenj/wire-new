@@ -47,15 +47,27 @@ def _normalize_source(name: str) -> str:
 # ── Google News URL unwrapping ────────────────────────────────────────────
 # Google News RSS entries have redirect URLs (news.google.com/rss/articles/...).
 # We resolve them to actual article URLs via HEAD requests with a shared cache.
+# If the server is behind a GDPR consent wall (e.g. hosted in EU), resolution
+# will always fail — we detect this once and skip all future attempts.
 
 _gnews_url_cache = {}  # url -> resolved_url
 _GNEWS_CACHE_MAX = 500
+_gnews_blocked = False  # set True after first consent-wall hit
+
+# Suppress noisy httpx INFO logs for redirect chains
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 async def _unwrap_google_news_url(url: str, client: httpx.AsyncClient) -> str:
     """Resolve a Google News redirect URL to the actual article URL.
-    Returns original URL if resolution fails."""
+    Returns original URL if resolution fails or consent wall detected."""
+    global _gnews_blocked
+
     if "news.google.com" not in url:
+        return url
+
+    # After first consent-wall hit, skip all future HTTP attempts
+    if _gnews_blocked:
         return url
 
     if url in _gnews_url_cache:
@@ -78,8 +90,9 @@ async def _unwrap_google_news_url(url: str, client: httpx.AsyncClient) -> str:
                     del _gnews_url_cache[k]
             _gnews_url_cache[url] = resolved
             return resolved
-        else:
-            log.debug(f"Google News URL unresolved (consent/redirect): {resolved[:120]}")
+        elif "consent.google" in resolved:
+            _gnews_blocked = True
+            log.warning("Google News consent wall detected — skipping URL resolution for this session")
     except Exception:
         pass
 
