@@ -116,17 +116,16 @@ header {
 /* ── Electric ball ───────────────────────────────────────────────── */
 .wire-ball {
     --energy: 0;
-    --size: calc(6px + var(--energy) * 10px);
-    --glow: calc(var(--energy) * 25px);
-    --glow2: calc(var(--energy) * 50px);
-    --glow3: calc(var(--energy) * 80px);
-    --bright: calc(0.08 + var(--energy) * 0.92);
+    --size: calc(8px + var(--energy) * 4px);
+    --glow: calc(var(--energy) * 12px);
+    --glow2: calc(var(--energy) * 24px);
+    --bright: calc(0.25 + var(--energy) * 0.75);
     width: var(--size);
     height: var(--size);
-    min-width: 6px;
-    min-height: 6px;
+    min-width: 8px;
+    min-height: 8px;
     border-radius: 50%;
-    margin-top: 6px;
+    margin-top: 5px;
     flex-shrink: 0;
     background: radial-gradient(circle at 30% 30%,
         hsla(40, 100%, 95%, var(--bright)),
@@ -136,38 +135,63 @@ header {
     );
     box-shadow:
         0 0 calc(var(--energy) * 3px) hsla(30, 100%, 80%, var(--bright)),
-        0 0 var(--glow) hsla(25, 100%, 55%, calc(var(--bright) * 0.9)),
-        0 0 var(--glow2) hsla(20, 100%, 45%, calc(var(--bright) * 0.5)),
-        0 0 var(--glow3) hsla(15, 100%, 35%, calc(var(--bright) * 0.2));
-    animation:
-        wirePulse calc(2.5s - var(--energy) * 1s) ease-in-out infinite,
-        wireCreepScale calc(4s - var(--energy) * 2s) ease-in-out infinite alternate;
+        0 0 var(--glow) hsla(25, 100%, 55%, calc(var(--bright) * 0.7)),
+        0 0 var(--glow2) hsla(20, 100%, 45%, calc(var(--bright) * 0.3));
+    animation: wirePulse 3s ease-in-out infinite;
     position: relative;
 }
 
 .wire-ball::after {
     content: '';
     position: absolute;
-    inset: -3px;
+    inset: -2px;
     border-radius: 50%;
     background: transparent;
-    box-shadow: 0 0 calc(var(--energy) * 12px) hsla(25, 100%, 65%, calc(var(--energy) * 0.5));
-    animation: wireGlow calc(3s - var(--energy) * 1.5s) ease-in-out infinite alternate;
+    box-shadow: 0 0 calc(var(--energy) * 8px) hsla(25, 100%, 65%, calc(var(--energy) * 0.4));
+    animation: wireGlow 3s ease-in-out infinite alternate;
+}
+
+/* Scoop-boosted: urgent amber flash */
+.wire-ball.scoop {
+    --size: calc(10px + var(--energy) * 4px);
+    background: radial-gradient(circle at 30% 30%,
+        hsla(45, 100%, 97%, 1),
+        hsla(40, 100%, 70%, 1),
+        hsla(30, 100%, 55%, 0.9),
+        hsla(20, 100%, 35%, 0.5)
+    );
+    box-shadow:
+        0 0 4px hsla(40, 100%, 85%, 1),
+        0 0 12px hsla(35, 100%, 60%, 0.9),
+        0 0 28px hsla(25, 100%, 50%, 0.5),
+        0 0 48px hsla(20, 100%, 40%, 0.2);
+    animation: scoopFlash 1.2s ease-in-out infinite;
+}
+
+.wire-ball.scoop::after {
+    box-shadow: 0 0 16px hsla(35, 100%, 65%, 0.7);
+    animation: scoopGlow 1.2s ease-in-out infinite alternate;
 }
 
 @keyframes wirePulse {
     0% { opacity: 0.85; filter: brightness(1); }
-    50% { opacity: 1; filter: brightness(1.1); }
+    50% { opacity: 1; filter: brightness(1.08); }
     100% { opacity: 0.85; filter: brightness(1); }
-}
-
-@keyframes wireCreepScale {
-    0% { transform: scale(1); }
-    100% { transform: scale(calc(1 + var(--energy) * 0.2)); }
 }
 
 @keyframes wireGlow {
     0% { opacity: 0.4; }
+    100% { opacity: 1; }
+}
+
+@keyframes scoopFlash {
+    0% { opacity: 0.7; filter: brightness(1); transform: scale(1); }
+    50% { opacity: 1; filter: brightness(1.4); transform: scale(1.15); }
+    100% { opacity: 0.7; filter: brightness(1); transform: scale(1); }
+}
+
+@keyframes scoopGlow {
+    0% { opacity: 0.3; }
     100% { opacity: 1; }
 }
 
@@ -572,6 +596,15 @@ header {
     <div id="stories"><div class="loading">Connecting to EDROWIRE...</div></div>
     <div id="load-more"><button onclick="loadMore()">Show older story clusters</button></div>
 </div>
+<footer style="max-width:900px;margin:40px auto 0;padding:0 20px 60px;border-top:1px solid #1a1a1a;text-align:center;">
+    <div style="padding-top:16px;font-size:11px;color:#444;display:flex;justify-content:center;gap:16px;flex-wrap:wrap;">
+        <a href="/about" style="color:#555;text-decoration:none;">About</a>
+        <a href="/contact" style="color:#555;text-decoration:none;">Contact</a>
+        <a href="/privacy" style="color:#555;text-decoration:none;">Privacy Policy</a>
+        <a href="/terms" style="color:#555;text-decoration:none;">Terms of Service</a>
+    </div>
+    <div style="margin-top:10px;font-size:10px;color:#333;">&copy; 2026 Substantive Systems, LLC. All rights reserved.</div>
+</footer>
 <div class="status-bar">
     <span id="status-total">—</span>
     <span id="status-updated">—</span>
@@ -789,7 +822,7 @@ function renderStory(s) {
         itemsDetail = `<div class="items-detail" id="items-${s.id}">${rows}</div>`;
     }
 
-    const countDisplay = s.source_count > 1 ? `<span class="count">+${s.source_count}</span>` : '';
+    const countDisplay = '';
     const timeAgo = formatTime(s.published_at || s.first_seen);
     const fullDate = formatFullDate(s.published_at || s.first_seen);
 
@@ -797,9 +830,10 @@ function renderStory(s) {
     const displayHeadline = (currentSort === 'new' && s.original_headline) ? s.original_headline : s.headline;
 
     const energy = wireEnergy(s);
+    const ballClass = s.scoop ? 'wire-ball scoop' : 'wire-ball';
 
     return `<div class="story" data-id="${s.id}">
-        <div class="wire-ball" style="--energy:${energy.toFixed(3)}"></div>
+        <div class="${ballClass}" style="--energy:${energy.toFixed(3)}"></div>
         <div class="story-body">
             <div class="story-main">
                 <span class="headline"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(displayHeadline)}</a></span>

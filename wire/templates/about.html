@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EDROWIRE — About</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" media="print" onload="this.media='all'">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0a; color: #cccccc; font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace; font-size: 13px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+.page { max-width: 700px; margin: 0 auto; padding: 16px 20px 80px; }
+header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; border-bottom: 1px solid #222; padding-bottom: 12px; }
+.logo { font-size: 24px; font-weight: 700; color: #ffb000; letter-spacing: 4px; text-decoration: none; }
+.subtitle { font-size: 14px; color: #666; letter-spacing: 2px; }
+.back-link { margin-left: auto; color: #555; text-decoration: none; font-size: 12px; }
+.back-link:hover { color: #ffb000; }
+h1 { font-size: 18px; color: #ffb000; letter-spacing: 2px; margin-bottom: 20px; }
+h2 { font-size: 14px; color: #ffb000; letter-spacing: 1px; margin: 24px 0 10px; }
+p { margin-bottom: 14px; color: #aaa; }
+footer { border-top: 1px solid #1a1a1a; margin-top: 40px; padding-top: 16px; text-align: center; }
+footer .links { font-size: 11px; color: #444; display: flex; justify-content: center; gap: 16px; flex-wrap: wrap; }
+footer .links a { color: #555; text-decoration: none; }
+footer .links a:hover { color: #ffb000; }
+footer .copy { margin-top: 10px; font-size: 10px; color: #333; }
+</style>
+</head>
+<body>
+<div class="page">
+    <header>
+        <a href="/" class="logo">EDROWIRE</a>
+        <span class="subtitle">ABOUT</span>
+        <a href="/" class="back-link">back to wire</a>
+    </header>
+
+    <h1>ABOUT EDROWIRE</h1>
+
+    <p>EDROWIRE is an algorithmic news wire that monitors over 100 editorial sources in real time, clusters related coverage into unified story threads, and surfaces what matters based on breadth of coverage and source quality.</p>
+
+    <h2>HOW IT WORKS</h2>
+    <p>RSS feeds and search sweeps are polled continuously. Incoming headlines are clustered using TF-IDF similarity matching. Each cluster is scored by the number and quality of independent sources reporting the story, with time decay so breaking news rises fast and stale stories fall naturally.</p>
+    <p>Headlines are rewritten into Bloomberg-wire style by AI for consistency and clarity. Categories (Tech, Markets, Politics, World) are assigned automatically. Source quality tiers weight trusted outlets more heavily in the ranking algorithm.</p>
+
+    <h2>EDITORIAL PHILOSOPHY</h2>
+    <p>EDROWIRE has no editorial staff and takes no editorial positions. The algorithm prioritizes stories with broad, independent multi-source coverage from reputable outlets. Single-source stories require a minimum quality threshold to surface. The system is designed to reflect what the press is covering, not to decide what should be covered.</p>
+
+    <h2>BUILT BY</h2>
+    <p>EDROWIRE is a product of Substantive Systems, LLC.</p>
+
+    <footer>
+        <div class="links">
+            <a href="/about">About</a>
+            <a href="/contact">Contact</a>
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+        </div>
+        <div class="copy">&copy; 2026 Substantive Systems, LLC. All rights reserved.</div>
+    </footer>
+</div>
+</body>
+</html>

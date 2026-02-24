@@ -26,9 +26,9 @@ JOB 2 — CATEGORIZE: Assign each cluster to exactly ONE category:
 - MARKETS: Stock markets, earnings, IPOs, interest rates, crypto/bitcoin, financial instruments, economic indicators, company valuations
 - POLITICS: Government, legislation, elections, political parties, policy, courts/legal rulings, regulation
 - WORLD: International affairs, wars/conflicts, diplomacy, disasters, non-US domestic news
-- GENERAL: Everything else (sports, entertainment, lifestyle, obituaries, weather, travel, food, opinion, product deals/reviews, human interest)
+- GENERAL: Everything else (sports, entertainment, music industry, lifestyle, obituaries, weather, travel, food, opinion, product deals/reviews, human interest, clickbait/vague headlines)
 
-IMPORTANT: Stories about tariffs, trade policy, or government regulation are POLITICS unless they specifically focus on stock price impact (then MARKETS). Stories about science, space, or medicine without a tech angle are GENERAL. Product deal roundups and "best of" lists are GENERAL. Blog meta-posts ("Adding TILs to my blog") are GENERAL.
+IMPORTANT: Stories about tariffs, trade policy, or government regulation are POLITICS unless they specifically focus on stock price impact (then MARKETS). Stories about science, space, or medicine without a tech angle are GENERAL. Product deal roundups and "best of" lists are GENERAL. Blog meta-posts ("Adding TILs to my blog") are GENERAL. Entertainment/music/media industry business stories are GENERAL, not MARKETS — "capital" or "investment" in a headline does not make it MARKETS unless it involves public markets or financial instruments. International crime, drug enforcement, and military operations outside the US are WORLD, not POLITICS. Clickbait or vague sensational headlines ("reveals the TRUTH", "no one wanted to admit") are GENERAL.
 
 For each numbered cluster, respond with EXACTLY this format:
 1. CATEGORY | REWRITTEN HEADLINE
@@ -167,7 +167,8 @@ def _fetch_clusters_for_rewrite(conn, now, limit):
             WHERE ri.cluster_id = sc.id
             AND ri.original_headline = sc.rewritten_headline
         )
-        ORDER BY sc.source_count DESC, sc.last_updated DESC
+        ORDER BY CASE WHEN COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL THEN 0 ELSE 1 END,
+                 sc.source_count DESC, sc.last_updated DESC
         LIMIT ?
     """, (now, limit)).fetchall()
 

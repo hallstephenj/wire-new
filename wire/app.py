@@ -212,6 +212,10 @@ _TEMPLATES_DIR = Path(__file__).parent / "templates"
 _INDEX_HTML = (_TEMPLATES_DIR / "index.html").read_text()
 _RIVER_HTML = (_TEMPLATES_DIR / "river.html").read_text()
 _AUDIT_HTML = (_TEMPLATES_DIR / "audit.html").read_text()
+_ABOUT_HTML = (_TEMPLATES_DIR / "about.html").read_text()
+_CONTACT_HTML = (_TEMPLATES_DIR / "contact.html").read_text()
+_PRIVACY_HTML = (_TEMPLATES_DIR / "privacy.html").read_text()
+_TERMS_HTML = (_TEMPLATES_DIR / "terms.html").read_text()
 
 @app.get("/", response_class=HTMLResponse)
 async def index():
@@ -284,6 +288,7 @@ async def get_stories(
                COALESCE(co.category_override, sc.category) as category,
                sc.source_count, sc.first_seen, sc.last_updated, sc.published_at,
                COALESCE(co.breaking, 0) as breaking,
+               co.scoop_boosted_at,
                (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
         FROM story_clusters sc
         LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
@@ -332,6 +337,7 @@ async def get_stories(
             "published_at": r["published_at"],
             "last_updated": r["last_updated"],
             "breaking": bool(r["breaking"]),
+            "scoop": bool(r["scoop_boosted_at"]),
             "other_sources": other_sources,
             "items": items,
         })
@@ -349,12 +355,28 @@ async def health():
     conn.close()
     return {"status": "ok", "clusters": clusters, "raw_items": items}
 
+@app.get("/about", response_class=HTMLResponse)
+async def about():
+    return HTMLResponse(_ABOUT_HTML)
+
+@app.get("/contact", response_class=HTMLResponse)
+async def contact():
+    return HTMLResponse(_CONTACT_HTML)
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy():
+    return HTMLResponse(_PRIVACY_HTML)
+
+@app.get("/terms", response_class=HTMLResponse)
+async def terms():
+    return HTMLResponse(_TERMS_HTML)
+
 @app.get("/algo-audit", response_class=HTMLResponse)
 async def algo_audit():
     return HTMLResponse(_AUDIT_HTML)
 
 @app.get("/api/audit/data")
-async def audit_data():
+async def audit_data(mode: str = Query(..., pattern="^(ranking|clustering|categories|headlines|sources)$")):
     conn = get_conn()
     now = datetime.now(timezone.utc).isoformat()
     algo = get_active_version()
@@ -397,7 +419,7 @@ async def audit_data():
             })
         return result
 
-    # Top 5 stories (hot sort)
+    # Shared SQL fragments
     hot_score = build_hot_score_sql(algo)
     reputable_sources_sql = build_reputable_sources_sql(algo)
     min_reputable = algo["min_reputable_sources"]
@@ -407,7 +429,6 @@ async def audit_data():
                           WHEN COALESCE(co.boost, 0) > 0 AND (co.scoop_boosted_at IS NULL OR co.scoop_boosted_at > datetime('now', '-{boost_hours} hours')) THEN 2
                           WHEN COALESCE(co.boost, 0) < 0 THEN 4
                           ELSE 3 END"""
-
     reputable_filter = f"""(SELECT COUNT(DISTINCT cs2.source_name) FROM cluster_sources cs2
         WHERE cs2.cluster_id = sc.id AND cs2.source_name IN {reputable_sources_sql}) >= {min_reputable}"""
     if algo.get("scoop_enabled"):
@@ -415,91 +436,90 @@ async def audit_data():
     else:
         reputable_clause = reputable_filter
     general_clause = "AND COALESCE(co.category_override, sc.category) != 'general'" if algo.get("general_exclusion", True) else ""
-    world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if algo.get("world_deprio", True) else "0"
+    world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if algo.get("world_deprio", True) else "0+0"
 
-    top_rows = conn.execute(f"""
-        SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
-               sc.primary_url, sc.primary_source,
-               COALESCE(co.category_override, sc.category) as category,
-               sc.source_count, sc.published_at,
-               (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
-        FROM story_clusters sc
-        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
-        WHERE sc.expires_at > ?
-          AND (co.hidden IS NULL OR co.hidden = 0)
-          AND {reputable_clause}
-          {general_clause}
-        ORDER BY {sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC
-        LIMIT 5
-    """, (now,)).fetchall()
-    top_stories = _enrich(top_rows)
+    result = {"algo_version": algo["name"]}
 
-    # 5 biggest multi-source clusters
-    big_rows = conn.execute(f"""
-        SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
-               sc.primary_url, sc.primary_source,
-               COALESCE(co.category_override, sc.category) as category,
-               sc.source_count, sc.published_at,
-               (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
-        FROM story_clusters sc
-        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
-        WHERE sc.expires_at > ?
-          AND (co.hidden IS NULL OR co.hidden = 0)
-        ORDER BY sc.source_count DESC
-        LIMIT 5
-    """, (now,)).fetchall()
-    big_clusters = _enrich(big_rows)
+    if mode == "ranking":
+        rows = conn.execute(f"""
+            SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
+                   sc.primary_url, sc.primary_source,
+                   COALESCE(co.category_override, sc.category) as category,
+                   sc.source_count, sc.published_at,
+                   (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
+            FROM story_clusters sc
+            LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+            WHERE sc.expires_at > ?
+              AND (co.hidden IS NULL OR co.hidden = 0)
+              AND {reputable_clause}
+              {general_clause}
+            ORDER BY {sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC
+            LIMIT 20
+        """, (now,)).fetchall()
+        result["items"] = _enrich(rows)
 
-    # 10 random recent stories for category check
-    cat_rows = conn.execute(f"""
-        SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
-               sc.primary_url, sc.primary_source,
-               COALESCE(co.category_override, sc.category) as category,
-               sc.source_count, sc.published_at,
-               (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
-        FROM story_clusters sc
-        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
-        WHERE sc.expires_at > ?
-          AND (co.hidden IS NULL OR co.hidden = 0)
-        ORDER BY RANDOM()
-        LIMIT 10
-    """, (now,)).fetchall()
-    category_sample = _enrich(cat_rows)
+    elif mode == "clustering":
+        rows = conn.execute(f"""
+            SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
+                   sc.primary_url, sc.primary_source,
+                   COALESCE(co.category_override, sc.category) as category,
+                   sc.source_count, sc.published_at,
+                   (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
+            FROM story_clusters sc
+            LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+            WHERE sc.expires_at > ?
+              AND (co.hidden IS NULL OR co.hidden = 0)
+              {general_clause}
+            ORDER BY sc.source_count DESC
+            LIMIT 15
+        """, (now,)).fetchall()
+        result["items"] = _enrich(rows)
 
-    # 10 stories where rewritten headline differs from original
-    hl_rows = conn.execute(f"""
-        SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
-               sc.primary_url, sc.primary_source,
-               COALESCE(co.category_override, sc.category) as category,
-               sc.source_count, sc.published_at,
-               (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
-        FROM story_clusters sc
-        LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
-        WHERE sc.expires_at > ?
-          AND (co.hidden IS NULL OR co.hidden = 0)
-          AND sc.rewritten_headline IS NOT NULL
-          AND (SELECT ri3.original_headline FROM raw_items ri3 WHERE ri3.cluster_id = sc.id LIMIT 1) IS NOT NULL
-          AND sc.rewritten_headline != (SELECT ri4.original_headline FROM raw_items ri4 WHERE ri4.cluster_id = sc.id LIMIT 1)
-        ORDER BY RANDOM()
-        LIMIT 10
-    """, (now,)).fetchall()
-    headline_sample = _enrich(hl_rows)
+    elif mode == "categories":
+        rows = conn.execute(f"""
+            SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
+                   sc.primary_url, sc.primary_source,
+                   COALESCE(co.category_override, sc.category) as category,
+                   sc.source_count, sc.published_at,
+                   (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
+            FROM story_clusters sc
+            LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+            WHERE sc.expires_at > ?
+              AND (co.hidden IS NULL OR co.hidden = 0)
+              {general_clause}
+            ORDER BY RANDOM()
+            LIMIT 40
+        """, (now,)).fetchall()
+        result["items"] = _enrich(rows)
 
-    # Source tiers from active algo version
-    source_tiers = {}
-    for mult, sources in algo["source_quality"].items():
-        source_tiers[str(mult)] = list(sources)
+    elif mode == "headlines":
+        rows = conn.execute(f"""
+            SELECT sc.id, COALESCE(co.headline_override, sc.rewritten_headline) as rewritten_headline,
+                   sc.primary_url, sc.primary_source,
+                   COALESCE(co.category_override, sc.category) as category,
+                   sc.source_count, sc.published_at,
+                   (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
+            FROM story_clusters sc
+            LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+            WHERE sc.expires_at > ?
+              AND (co.hidden IS NULL OR co.hidden = 0)
+              {general_clause}
+              AND sc.rewritten_headline IS NOT NULL
+              AND (SELECT ri3.original_headline FROM raw_items ri3 WHERE ri3.cluster_id = sc.id LIMIT 1) IS NOT NULL
+              AND sc.rewritten_headline != (SELECT ri4.original_headline FROM raw_items ri4 WHERE ri4.cluster_id = sc.id LIMIT 1)
+            ORDER BY RANDOM()
+            LIMIT 30
+        """, (now,)).fetchall()
+        result["items"] = _enrich(rows)
+
+    elif mode == "sources":
+        source_tiers = {}
+        for mult, sources in algo["source_quality"].items():
+            source_tiers[str(mult)] = list(sources)
+        result["items"] = source_tiers
 
     conn.close()
-
-    return {
-        "top_stories": top_stories,
-        "big_clusters": big_clusters,
-        "category_sample": category_sample,
-        "headline_sample": headline_sample,
-        "source_tiers": source_tiers,
-        "algo_version": algo["name"],
-    }
+    return result
 
 @app.get("/cp", response_class=HTMLResponse)
 async def river():
