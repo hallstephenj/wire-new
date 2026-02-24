@@ -327,6 +327,16 @@ def _maybe_scoop_boost(conn, cluster_id: str, headline: str, source_name: str, a
     log.info(f"Scoop boost: [{source_name}] {headline[:80]}")
 
 
+def _headline_relevance(headline: str, cluster_headline: str) -> float:
+    """Quick TF-IDF check: how well does this article's headline match the cluster."""
+    try:
+        v = TfidfVectorizer(stop_words="english")
+        m = v.fit_transform([headline, cluster_headline])
+        return float(cosine_similarity(m[0:1], m[1:2])[0, 0])
+    except Exception:
+        return 0.0
+
+
 def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline: str, category: str, published_at: str = None):
     now = datetime.now(timezone.utc).isoformat()
 
@@ -339,13 +349,18 @@ def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline:
     # Update count (distinct sources, not URLs)
     count = conn.execute("SELECT COUNT(DISTINCT source_name) as c FROM cluster_sources WHERE cluster_id=?", (cluster_id,)).fetchone()["c"]
 
-    # Check if this source has higher priority
-    current = conn.execute("SELECT primary_source FROM story_clusters WHERE id=?", (cluster_id,)).fetchone()
+    # Check if this source has higher priority AND its headline is relevant
+    # to the cluster topic. Without the relevance check, a high-tier source's
+    # tangentially related article (e.g. a live blog mentioning tariffs in passing)
+    # can hijack the primary link away from an actually on-topic article.
+    current = conn.execute("SELECT primary_source, rewritten_headline FROM story_clusters WHERE id=?", (cluster_id,)).fetchone()
     updates = {"source_count": count, "last_updated": now}
 
     if get_total_score(source_name) > get_total_score(current["primary_source"]):
-        updates["primary_url"] = url
-        updates["primary_source"] = source_name
+        relevance = _headline_relevance(headline, current["rewritten_headline"] or "")
+        if relevance >= 0.15:
+            updates["primary_url"] = url
+            updates["primary_source"] = source_name
 
     # When primary source changes, use the new primary's published_at
     # Otherwise only update if no published_at is set yet
