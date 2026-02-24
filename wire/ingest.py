@@ -54,6 +54,11 @@ _gnews_url_cache = {}  # url -> resolved_url
 _GNEWS_CACHE_MAX = 500
 _gnews_blocked = False  # set True after first consent-wall hit
 
+
+def is_gnews_blocked() -> bool:
+    """Return True if Google News is blocked by a consent wall."""
+    return _gnews_blocked
+
 # Suppress noisy httpx INFO logs for redirect chains
 logging.getLogger("httpx").setLevel(logging.WARNING)
 

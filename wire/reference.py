@@ -11,7 +11,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from wire.db import get_conn
-from wire.ingest import _poll_single_feed
+from wire.ingest import _poll_single_feed, is_gnews_blocked
 from wire.rewrite import urgent_rewrite
 from wire.events import push as ev
 
@@ -252,11 +252,33 @@ def _find_matching_cluster(headline: str, threshold: float = 0.30) -> str | None
 
 # ── Main orchestrator ─────────────────────────────────────────────────
 
+async def _probe_gnews():
+    """Quick probe to detect if Google News is accessible (vs consent wall)."""
+    from wire.ingest import _gnews_blocked
+    import wire.ingest as _ingest_mod
+    if _ingest_mod._gnews_blocked:
+        return
+    try:
+        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+            resp = await client.head(
+                "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
+                headers={"Accept-Language": "en-US,en;q=0.9"},
+            )
+            if "consent.google" in str(resp.url):
+                _ingest_mod._gnews_blocked = True
+                log.warning("Google News consent wall detected — gap-fill searches disabled")
+    except Exception:
+        pass
+
+
 async def check_references(on_progress=None) -> dict:
     """
     Main reference check: scrape editorial front pages, compare against
     existing clusters, fill gaps via Google News search.
     """
+    # Detect consent wall early so gap-fill searches are skipped
+    await _probe_gnews()
+
     conn = get_conn()
     sites = conn.execute(
         "SELECT * FROM reference_sites WHERE enabled = 1 ORDER BY id"
@@ -316,6 +338,13 @@ async def check_references(on_progress=None) -> dict:
                 # Gap detected — try to fill via Google News search
                 site_gaps += 1
                 total_gaps += 1
+
+                # Skip Google News gap-fill if consent wall is active (EU servers)
+                if is_gnews_blocked():
+                    log_entries.append(
+                        (site["id"], site["name"], headline_text, headline_url, "gap_unfilled", None, "Google News blocked (consent wall)", now)
+                    )
+                    continue
 
                 try:
                     # Search Google News RSS for this headline
