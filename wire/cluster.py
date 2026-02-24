@@ -16,6 +16,18 @@ from wire.algorithm import get_active_version
 
 log = logging.getLogger("wire.cluster")
 
+# ── Sentence embedding model (lazy-loaded) ────────────────────────────────
+_embed_model = None
+
+def _get_embed_model():
+    """Lazy-load a lightweight sentence-transformer for semantic similarity."""
+    global _embed_model
+    if _embed_model is None:
+        from sentence_transformers import SentenceTransformer
+        _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
+        log.info("Loaded sentence embedding model: all-MiniLM-L6-v2")
+    return _embed_model
+
 # ── Entity / topic extraction for aggressive clustering ──────────────────
 
 # Key entities/topics that should force clustering together
@@ -348,21 +360,42 @@ def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline:
     conn.execute(f"UPDATE story_clusters SET {set_clause} WHERE id=?", (*updates.values(), cluster_id))
 
 
+def _do_merge(conn, rows, i, j, now, merged):
+    """Execute the actual merge of cluster j into cluster i."""
+    winner_id = rows[i]["id"]
+    loser_id = rows[j]["id"]
+
+    conn.execute(
+        "UPDATE OR IGNORE cluster_sources SET cluster_id=? WHERE cluster_id=?",
+        (winner_id, loser_id)
+    )
+    conn.execute(
+        "UPDATE raw_items SET cluster_id=? WHERE cluster_id=?",
+        (winner_id, loser_id)
+    )
+    conn.execute("DELETE FROM cluster_sources WHERE cluster_id=?", (loser_id,))
+    new_count = conn.execute(
+        "SELECT COUNT(DISTINCT source_name) as c FROM cluster_sources WHERE cluster_id=?",
+        (winner_id,)
+    ).fetchone()["c"]
+    conn.execute(
+        "UPDATE story_clusters SET source_count=?, last_updated=? WHERE id=?",
+        (new_count, now.isoformat(), winner_id)
+    )
+    conn.execute("DELETE FROM story_clusters WHERE id=?", (loser_id,))
+    merged.add(loser_id)
+
+
 def merge_existing_clusters(conn):
     """
-    Merge existing clusters whose rewritten headlines are very similar.
+    Hybrid merge: TF-IDF pass first (fast, high-confidence only),
+    then embedding pass (semantic, catches paraphrases).
     Called at end of boot and hourly to catch duplicates that slip through.
-    Uses the active algorithm version's clustering thresholds.
     """
     algo = get_active_version()
-    # Merge thresholds are looser (lower) than assign thresholds because
-    # rewritten headlines are already normalized — easier to compare
-    merge_tfidf = algo.get("tfidf_threshold", 0.30) - 0.10
-    merge_topic_tfidf = algo.get("topic_tfidf_threshold", 0.15) - 0.05
-    merge_topic_only = algo.get("topic_only_threshold", 1.0)
-    merge_topic_overlap_min = algo.get("topic_overlap_min", 0.5)
-    merge_kw_tfidf = max(algo.get("keyword_tfidf_threshold", 0.10) - 0.05, 0.05)
-    merge_min_kw = max(algo.get("min_keyword_overlap", 3) - 1, 2)
+    # TF-IDF pass uses a strong threshold — only near-identical wording
+    # Embeddings handle the semantic/paraphrase cases in pass 2
+    merge_tfidf = max(algo.get("tfidf_threshold", 0.30), 0.40)
 
     now = datetime.now(timezone.utc)
     rows = conn.execute(
@@ -374,24 +407,15 @@ def merge_existing_clusters(conn):
         return 0
 
     headlines = [r["rewritten_headline"] or "" for r in rows]
-    topic_sets = [_extract_topics(h) for h in headlines]
-    keyword_sets = [_extract_keywords(h) for h in headlines]
 
-    # Build TF-IDF matrix once, then use sparse dot product to find all
-    # candidate pairs above the lowest threshold in one pass
+    # ── Pass 1: TF-IDF only (fast, high-confidence word overlap) ──────────
     try:
         tfidf = TfidfVectorizer(stop_words="english", max_features=5000)
         matrix = tfidf.fit_transform(headlines)
+        sim_matrix = (matrix * matrix.T).toarray()
     except Exception as e:
         log.warning(f"Merge TF-IDF error: {e}")
-        return 0
-
-    # Compute full pairwise similarity as a sparse matrix (only stores non-zero)
-    # This replaces the O(N²) nested loop with a single matrix multiply
-    sim_matrix = (matrix * matrix.T).toarray()
-
-    # Find candidate pairs above the lowest useful threshold
-    min_threshold = min(merge_kw_tfidf, merge_topic_tfidf, merge_tfidf)
+        sim_matrix = np.zeros((len(rows), len(rows)))
 
     merged = set()
     merge_count = 0
@@ -402,59 +426,67 @@ def merge_existing_clusters(conn):
         for j in range(i + 1, len(rows)):
             if rows[j]["id"] in merged:
                 continue
+            if sim_matrix[i, j] >= merge_tfidf:
+                log.info(f"TF-IDF merge: '{headlines[i][:60]}' ← '{headlines[j][:60]}' (sim={sim_matrix[i, j]:.3f})")
+                _do_merge(conn, rows, i, j, now, merged)
+                merge_count += 1
 
-            sim = sim_matrix[i, j]
+    # Commit pass 1 before re-fetching for pass 2
+    if merge_count > 0:
+        conn.commit()
 
-            # Fast reject: if TF-IDF is below all thresholds and no topic overlap,
-            # skip the more expensive checks
-            if sim < min_threshold:
-                topic_overlap = _topic_overlap_score(topic_sets[i], topic_sets[j])
-                if topic_overlap < merge_topic_overlap_min and topic_overlap < merge_topic_only:
-                    continue
+    # ── Pass 2: Sentence embeddings (semantic, catches paraphrases) ───────
+    # Re-fetch rows since pass 1 may have deleted some
+    remaining_ids = {rows[i]["id"] for i in range(len(rows)) if rows[i]["id"] not in merged}
+    if len(remaining_ids) < 2:
+        if merge_count > 0:
+            invalidate_tfidf_cache()
+        conn.commit()
+        log.info(f"Merged {merge_count} duplicate clusters (TF-IDF only)")
+        return merge_count
 
-            topic_overlap = _topic_overlap_score(topic_sets[i], topic_sets[j])
-            kw_overlap = _keyword_overlap_score(keyword_sets[i], keyword_sets[j])
+    rows2 = conn.execute(
+        "SELECT id, rewritten_headline, source_count FROM story_clusters WHERE expires_at > ? ORDER BY source_count DESC",
+        (now.isoformat(),)
+    ).fetchall()
 
-            should_merge = (
-                sim >= merge_tfidf or
-                (sim >= merge_topic_tfidf and topic_overlap >= merge_topic_overlap_min) or
-                (topic_overlap >= merge_topic_only) or
-                (kw_overlap >= merge_min_kw and sim >= merge_kw_tfidf)
-            )
+    if len(rows2) < 2:
+        if merge_count > 0:
+            invalidate_tfidf_cache()
+        conn.commit()
+        log.info(f"Merged {merge_count} duplicate clusters (TF-IDF only)")
+        return merge_count
 
-            if should_merge:
-                # Merge j into i (i has higher source_count due to ORDER BY)
-                winner_id = rows[i]["id"]
-                loser_id = rows[j]["id"]
+    headlines2 = [r["rewritten_headline"] or "" for r in rows2]
 
-                # Move sources
-                conn.execute(
-                    "UPDATE OR IGNORE cluster_sources SET cluster_id=? WHERE cluster_id=?",
-                    (winner_id, loser_id)
-                )
-                # Move raw items
-                conn.execute(
-                    "UPDATE raw_items SET cluster_id=? WHERE cluster_id=?",
-                    (winner_id, loser_id)
-                )
-                # Delete orphan sources that couldn't move (duplicate key)
-                conn.execute("DELETE FROM cluster_sources WHERE cluster_id=?", (loser_id,))
-                # Update winner count
-                new_count = conn.execute(
-                    "SELECT COUNT(DISTINCT source_name) as c FROM cluster_sources WHERE cluster_id=?",
-                    (winner_id,)
-                ).fetchone()["c"]
-                conn.execute(
-                    "UPDATE story_clusters SET source_count=?, last_updated=? WHERE id=?",
-                    (new_count, now.isoformat(), winner_id)
-                )
-                # Delete loser
-                conn.execute("DELETE FROM story_clusters WHERE id=?", (loser_id,))
-                merged.add(loser_id)
+    EMBED_THRESHOLD = 0.75  # semantic similarity threshold for merge
+
+    try:
+        model = _get_embed_model()
+        embeddings = model.encode(headlines2, normalize_embeddings=True, show_progress_bar=False)
+        embed_sim = embeddings @ embeddings.T
+    except Exception as e:
+        log.warning(f"Embedding merge error: {e}")
+        if merge_count > 0:
+            invalidate_tfidf_cache()
+        conn.commit()
+        log.info(f"Merged {merge_count} duplicate clusters (TF-IDF only, embedding failed)")
+        return merge_count
+
+    merged2 = set()
+    for i in range(len(rows2)):
+        if rows2[i]["id"] in merged2:
+            continue
+        for j in range(i + 1, len(rows2)):
+            if rows2[j]["id"] in merged2:
+                continue
+            if embed_sim[i, j] >= EMBED_THRESHOLD:
+                log.info(f"Embedding merge: '{headlines2[i][:60]}' ← '{headlines2[j][:60]}' (sim={embed_sim[i, j]:.3f})")
+                _do_merge(conn, rows2, i, j, now, merged2)
                 merge_count += 1
 
     if merge_count > 0:
         invalidate_tfidf_cache()
     conn.commit()
-    log.info(f"Merged {merge_count} duplicate clusters")
+    log.info(f"Merged {merge_count} duplicate clusters (TF-IDF + embeddings)")
     return merge_count

@@ -113,86 +113,60 @@ header {
 
 .story-body { flex: 1; min-width: 0; }
 
-/* ── Electric ball ───────────────────────────────────────────────── */
+/* ── Phosphor dot ────────────────────────────────────────────────── */
 .wire-ball {
     --energy: 0;
-    --size: calc(8px + var(--energy) * 4px);
-    --glow: calc(var(--energy) * 12px);
-    --glow2: calc(var(--energy) * 24px);
-    --bright: calc(0.25 + var(--energy) * 0.75);
+    --size: 6px;
+    --a: calc(0.15 + var(--energy) * 0.85);
+    --bloom: calc(var(--energy) * 10px);
+    --bloom2: calc(var(--energy) * 22px);
     width: var(--size);
     height: var(--size);
-    min-width: 8px;
-    min-height: 8px;
+    min-width: 6px;
+    min-height: 6px;
     border-radius: 50%;
-    margin-top: 5px;
+    margin-top: 6px;
     flex-shrink: 0;
-    background: radial-gradient(circle at 30% 30%,
-        hsla(40, 100%, 95%, var(--bright)),
-        hsla(30, 100%, 65%, var(--bright)),
-        hsla(22, 100%, 50%, calc(var(--bright) * 0.7)),
-        hsla(15, 100%, 30%, calc(var(--bright) * 0.3))
-    );
+    background: rgba(255, 176, 0, var(--a));
     box-shadow:
-        0 0 calc(var(--energy) * 3px) hsla(30, 100%, 80%, var(--bright)),
-        0 0 var(--glow) hsla(25, 100%, 55%, calc(var(--bright) * 0.7)),
-        0 0 var(--glow2) hsla(20, 100%, 45%, calc(var(--bright) * 0.3));
-    animation: wirePulse 3s ease-in-out infinite;
+        0 0 2px rgba(255, 176, 0, var(--a)),
+        0 0 var(--bloom) rgba(255, 160, 0, calc(var(--a) * 0.5)),
+        0 0 var(--bloom2) rgba(255, 140, 0, calc(var(--a) * 0.15));
+    animation: phosphor 4s ease-in-out infinite;
     position: relative;
 }
 
 .wire-ball::after {
     content: '';
     position: absolute;
-    inset: -2px;
+    inset: -1px;
     border-radius: 50%;
-    background: transparent;
-    box-shadow: 0 0 calc(var(--energy) * 8px) hsla(25, 100%, 65%, calc(var(--energy) * 0.4));
-    animation: wireGlow 3s ease-in-out infinite alternate;
+    border: 1px solid rgba(255, 176, 0, calc(var(--energy) * 0.3));
 }
 
-/* Scoop-boosted: urgent amber flash */
+/* Scoop: brighter, tighter pulse */
 .wire-ball.scoop {
-    --size: calc(10px + var(--energy) * 4px);
-    background: radial-gradient(circle at 30% 30%,
-        hsla(45, 100%, 97%, 1),
-        hsla(40, 100%, 70%, 1),
-        hsla(30, 100%, 55%, 0.9),
-        hsla(20, 100%, 35%, 0.5)
-    );
+    --size: 7px;
+    background: rgba(255, 200, 60, var(--a));
     box-shadow:
-        0 0 4px hsla(40, 100%, 85%, 1),
-        0 0 12px hsla(35, 100%, 60%, 0.9),
-        0 0 28px hsla(25, 100%, 50%, 0.5),
-        0 0 48px hsla(20, 100%, 40%, 0.2);
-    animation: scoopFlash 1.2s ease-in-out infinite;
+        0 0 3px rgba(255, 200, 60, var(--a)),
+        0 0 8px rgba(255, 176, 0, calc(var(--a) * 0.7)),
+        0 0 20px rgba(255, 160, 0, calc(var(--a) * 0.3));
+    animation: phosphorScoop 2s ease-in-out infinite;
 }
 
 .wire-ball.scoop::after {
-    box-shadow: 0 0 16px hsla(35, 100%, 65%, 0.7);
-    animation: scoopGlow 1.2s ease-in-out infinite alternate;
+    border-color: rgba(255, 200, 60, calc(var(--energy) * 0.5));
 }
 
-@keyframes wirePulse {
-    0% { opacity: 0.85; filter: brightness(1); }
-    50% { opacity: 1; filter: brightness(1.08); }
-    100% { opacity: 0.85; filter: brightness(1); }
+@keyframes phosphor {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1; }
 }
 
-@keyframes wireGlow {
-    0% { opacity: 0.4; }
-    100% { opacity: 1; }
-}
-
-@keyframes scoopFlash {
-    0% { opacity: 0.7; filter: brightness(1); transform: scale(1); }
-    50% { opacity: 1; filter: brightness(1.4); transform: scale(1.15); }
-    100% { opacity: 0.7; filter: brightness(1); transform: scale(1); }
-}
-
-@keyframes scoopGlow {
-    0% { opacity: 0.3; }
-    100% { opacity: 1; }
+@keyframes phosphorScoop {
+    0%, 100% { opacity: 0.7; filter: brightness(1); }
+    50% { opacity: 1; filter: brightness(1.15); }
 }
 
 .story-main {
@@ -576,7 +550,6 @@ header {
     <header>
         <div>
             <span class="logo">EDROWIRE</span><span class="cursor">▌</span>
-            <span class="live-dot"></span>
         </div>
         <div class="controls">
             <div class="tabs" id="sort-tabs">
