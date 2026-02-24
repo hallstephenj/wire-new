@@ -81,7 +81,6 @@ def init_db():
     );
     CREATE INDEX IF NOT EXISTS idx_curation_pinned ON curation_overrides(pinned);
     CREATE INDEX IF NOT EXISTS idx_curation_hidden ON curation_overrides(hidden);
-    CREATE INDEX IF NOT EXISTS idx_curation_composite ON curation_overrides(cluster_id, hidden, pinned, boost);
 
     CREATE TABLE IF NOT EXISTS curation_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -193,6 +192,9 @@ def init_db():
         conn.execute("ALTER TABLE curation_overrides ADD COLUMN expiry_override TEXT")
     if "scoop_boosted_at" not in co_cols:
         conn.execute("ALTER TABLE curation_overrides ADD COLUMN scoop_boosted_at TEXT")
+
+    # Composite index (created after migrations so boost column exists)
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_curation_composite ON curation_overrides(cluster_id, hidden, pinned, boost)")
 
     # Seed content_filters if empty
     filter_count = conn.execute("SELECT COUNT(*) as c FROM content_filters").fetchone()["c"]
