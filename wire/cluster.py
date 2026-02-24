@@ -134,8 +134,13 @@ def invalidate_tfidf_cache():
     _tfidf_cache["built_at"] = 0
 
 
-def _build_tfidf_cache(conn, cutoff: str, now_iso: str):
-    """Rebuild the TF-IDF cache from current clusters."""
+def _build_tfidf_cache(conn, cutoff: str, now_iso: str, is_ttl_refresh: bool = False):
+    """Rebuild the TF-IDF cache from current clusters.
+
+    Embeddings are only computed on TTL refreshes (stable cache), not after
+    invalidation, since invalidation happens on every new cluster creation
+    and re-encoding all headlines each time is O(n²) during rapid ingestion.
+    """
     rows = conn.execute(
         """SELECT sc.id, sc.rewritten_headline, sc.primary_source, sc.source_count,
                   co.scoop_boosted_at
@@ -169,10 +174,25 @@ def _build_tfidf_cache(conn, cutoff: str, now_iso: str):
     _tfidf_cache["headlines"] = headlines
     _tfidf_cache["topic_sets"] = [_extract_topics(h) for h in headlines]
     _tfidf_cache["keyword_sets"] = [_extract_keywords(h) for h in headlines]
-    _tfidf_cache["embeddings"] = None  # computed lazily in Pass 4
     _tfidf_cache["rows"] = list(rows)
     _tfidf_cache["built_at"] = time.monotonic()
     _tfidf_cache["db_cutoff"] = cutoff
+
+    # Only compute embeddings on TTL refresh (cache was stable for 10s).
+    # During rapid ingestion the cache is invalidated on every new cluster,
+    # so skip the expensive encode to keep ingestion fast.  Pass 4 is
+    # effectively disabled until the cluster set stabilises.
+    if is_ttl_refresh:
+        try:
+            model = _get_embed_model()
+            _tfidf_cache["embeddings"] = model.encode(
+                headlines, normalize_embeddings=True, show_progress_bar=False
+            )
+        except Exception as e:
+            log.warning(f"Embedding cache build error: {e}")
+            _tfidf_cache["embeddings"] = None
+    else:
+        _tfidf_cache["embeddings"] = None
 
 
 def _get_tfidf_cache(conn, cutoff: str, now_iso: str):
@@ -180,7 +200,9 @@ def _get_tfidf_cache(conn, cutoff: str, now_iso: str):
     age = time.monotonic() - _tfidf_cache["built_at"]
     if age < _TFIDF_CACHE_TTL and _tfidf_cache["db_cutoff"] == cutoff:
         return _tfidf_cache
-    _build_tfidf_cache(conn, cutoff, now_iso)
+    # TTL refresh = cache expired naturally; invalidation = built_at was zeroed
+    is_ttl = _tfidf_cache["built_at"] > 0
+    _build_tfidf_cache(conn, cutoff, now_iso, is_ttl_refresh=is_ttl)
     return _tfidf_cache
 
 
@@ -290,18 +312,14 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
 
         # ── Pass 4: Sentence embedding similarity ───────────────────────
         # Catches semantic paraphrases that TF-IDF/topic/keyword miss.
-        # Embeddings are computed lazily here (not in cache build) to keep
-        # ingestion fast — this pass only fires when passes 1-3 all miss.
+        # Only runs when embeddings are pre-computed (cache survived a full
+        # TTL cycle without invalidation).  During rapid ingestion this pass
+        # is skipped; merge_existing_clusters catches stragglers afterward.
         embed_threshold = algo.get("embed_threshold", 0.72)
-        try:
-            model = _get_embed_model()
-            # Lazily compute cluster embeddings on first Pass 4 hit
-            if cache["embeddings"] is None and cache["headlines"]:
-                cache["embeddings"] = model.encode(
-                    cache["headlines"], normalize_embeddings=True, show_progress_bar=False
-                )
-            cached_embeddings = cache["embeddings"]
-            if cached_embeddings is not None:
+        cached_embeddings = cache.get("embeddings")
+        if cached_embeddings is not None:
+            try:
+                model = _get_embed_model()
                 new_embed = model.encode([headline], normalize_embeddings=True, show_progress_bar=False)
                 embed_sims = (new_embed @ cached_embeddings.T)[0]
                 best_embed_idx = int(embed_sims.argmax())
@@ -313,8 +331,8 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
                        similarity=round(best_embed_sim, 3), tfidf=round(best_tfidf_sim, 3), method="embedding")
                     _add_to_cluster(conn, cluster_id, source_name, url, headline, category, published_at=published_at)
                     return cluster_id
-        except Exception as e:
-            log.warning(f"Embedding pass error: {e}")
+            except Exception as e:
+                log.warning(f"Embedding pass error: {e}")
 
     # New cluster — invalidate cache so next call picks it up
     invalidate_tfidf_cache()
