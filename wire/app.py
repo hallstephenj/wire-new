@@ -14,7 +14,7 @@ from wire.db import init_db, get_conn
 from wire.config import load_config, set_override, get_overrides
 from wire.ingest import poll_feeds, search_sweep, backfill_48h, invalidate_filter_cache
 from wire.rewrite import rewrite_pending, rewrite_boot
-from wire.cluster import assign_cluster, merge_existing_clusters
+from wire.cluster import assign_cluster, merge_existing_clusters, mark_boot_complete
 from wire.events import snapshot as events_snapshot
 from wire.scores import all_scores, get_score
 from wire.reference import run_reference_check
@@ -153,6 +153,7 @@ async def startup_backfill():
     boot_state["rewriting_progress"] = 1
 
     # Merge duplicate clusters before going live
+    mark_boot_complete()  # allow embedding model to load now
     try:
         conn = get_conn()
         merged = merge_existing_clusters(conn)

@@ -18,11 +18,27 @@ log = logging.getLogger("wire.cluster")
 
 # ── Sentence embedding model (lazy-loaded) ────────────────────────────────
 _embed_model = None
+_boot_complete = False  # set True once boot finishes — defers model load
+
+
+def mark_boot_complete():
+    """Signal that boot is done; embedding model may now be loaded."""
+    global _boot_complete
+    _boot_complete = True
+
 
 def _get_embed_model():
-    """Lazy-load a lightweight sentence-transformer for semantic similarity."""
+    """Lazy-load a lightweight sentence-transformer for semantic similarity.
+    Deferred until after boot to avoid slowing startup."""
     global _embed_model
     if _embed_model is None:
+        if not _boot_complete:
+            return None
+        import os
+        os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+        os.environ["TQDM_DISABLE"] = "1"  # suppress weight-loading progress bars
+        # Suppress verbose logging from sentence-transformers
+        logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
         from sentence_transformers import SentenceTransformer
         _embed_model = SentenceTransformer("all-MiniLM-L6-v2")
         log.info("Loaded sentence embedding model: all-MiniLM-L6-v2")
@@ -183,13 +199,16 @@ def _build_tfidf_cache(conn, cutoff: str, now_iso: str, is_ttl_refresh: bool = F
     # so skip the expensive encode to keep ingestion fast.  Pass 4 is
     # effectively disabled until the cluster set stabilises.
     if is_ttl_refresh:
-        try:
-            model = _get_embed_model()
-            _tfidf_cache["embeddings"] = model.encode(
-                headlines, normalize_embeddings=True, show_progress_bar=False
-            )
-        except Exception as e:
-            log.warning(f"Embedding cache build error: {e}")
+        model = _get_embed_model()
+        if model is not None:
+            try:
+                _tfidf_cache["embeddings"] = model.encode(
+                    headlines, normalize_embeddings=True, show_progress_bar=False
+                )
+            except Exception as e:
+                log.warning(f"Embedding cache build error: {e}")
+                _tfidf_cache["embeddings"] = None
+        else:
             _tfidf_cache["embeddings"] = None
     else:
         _tfidf_cache["embeddings"] = None
