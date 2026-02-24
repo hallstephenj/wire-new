@@ -231,6 +231,12 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
                 return True
             return published_at >= scoop_at
 
+        # ── Absolute floor: reject if headline has near-zero overlap ─────
+        # Even weaker paths (topic, keyword) should not fire when TF-IDF
+        # is essentially noise.  This prevents stray articles from joining
+        # a cluster via inflated keyword counts or a single shared topic.
+        TFIDF_FLOOR = 0.08
+
         # ── Decision: combine both signals ───────────────────────────────
         # Strong TF-IDF match alone — headlines must be very similar
         if best_tfidf_sim >= tfidf_threshold and _scoop_date_ok(best_tfidf_idx):
@@ -242,7 +248,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
 
         # Topic overlap with weak TF-IDF — requires 2+ shared topics to avoid
         # single broad topic (e.g. "tariff") linking unrelated stories
-        if best_topic_score >= topic_overlap_min and best_topic_shared >= 2 and best_tfidf_sim >= topic_tfidf_threshold and best_topic_idx >= 0 and _scoop_date_ok(best_topic_idx):
+        if best_topic_score >= topic_overlap_min and best_topic_shared >= 2 and best_tfidf_sim >= max(topic_tfidf_threshold, TFIDF_FLOOR) and best_topic_idx >= 0 and _scoop_date_ok(best_topic_idx):
             cluster_id = rows[best_topic_idx]["id"]
             ev("cluster_hit", headline=headline, matched=rows[best_topic_idx]["rewritten_headline"],
                similarity=round(best_tfidf_sim, 3), topic_overlap=round(best_topic_score, 2), method="topic+tfidf")
@@ -251,7 +257,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
 
         # Strong topic overlap alone — requires 2+ shared entities to prevent
         # broad single-topic matches (e.g. "tariff" alone linking unrelated stories)
-        if best_topic_score >= topic_only_threshold and best_topic_shared >= 2 and best_topic_idx >= 0 and _scoop_date_ok(best_topic_idx):
+        if best_topic_score >= topic_only_threshold and best_topic_shared >= 2 and best_tfidf_sim >= TFIDF_FLOOR and best_topic_idx >= 0 and _scoop_date_ok(best_topic_idx):
             cluster_id = rows[best_topic_idx]["id"]
             ev("cluster_hit", headline=headline, matched=rows[best_topic_idx]["rewritten_headline"],
                topic_overlap=round(best_topic_score, 2), method="topic_only")
@@ -261,7 +267,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
         # ── Pass 3: Keyword overlap ──────────────────────────────────────
         # Catches developing story angles that share rare terms
         new_keywords = _extract_keywords(headline)
-        if new_keywords and best_tfidf_sim >= keyword_tfidf_threshold:
+        if new_keywords and best_tfidf_sim >= max(keyword_tfidf_threshold, TFIDF_FLOOR):
             best_kw_idx = -1
             best_kw_count = 0
             for i, cluster_kw in enumerate(cache["keyword_sets"]):
@@ -376,18 +382,40 @@ def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline:
 
 
 def _do_merge(conn, rows, i, j, now, merged):
-    """Execute the actual merge of cluster j into cluster i."""
+    """Execute the actual merge of cluster j into cluster i.
+
+    Moves sources and raw items from the loser (j) to the winner (i).
+    Raw items whose original headline has near-zero relevance to the
+    winner cluster are orphaned into their own new cluster instead of
+    being blindly dragged along — this prevents merge cascades from
+    polluting clusters with completely unrelated articles.
+    """
     winner_id = rows[i]["id"]
     loser_id = rows[j]["id"]
+    winner_headline = rows[i]["rewritten_headline"] or ""
 
+    # ── Move sources ──────────────────────────────────────────────────
     conn.execute(
         "UPDATE OR IGNORE cluster_sources SET cluster_id=? WHERE cluster_id=?",
         (winner_id, loser_id)
     )
-    conn.execute(
-        "UPDATE raw_items SET cluster_id=? WHERE cluster_id=?",
-        (winner_id, loser_id)
-    )
+
+    # ── Move raw items, but check relevance first ─────────────────────
+    MERGE_ITEM_FLOOR = 0.04  # very low — just catches total garbage
+    loser_items = conn.execute(
+        "SELECT id, original_headline FROM raw_items WHERE cluster_id=?",
+        (loser_id,)
+    ).fetchall()
+
+    for item in loser_items:
+        rel = _headline_relevance(item["original_headline"] or "", winner_headline)
+        if rel >= MERGE_ITEM_FLOOR:
+            conn.execute("UPDATE raw_items SET cluster_id=? WHERE id=?", (winner_id, item["id"]))
+        else:
+            log.info(f"Merge skip: '{(item['original_headline'] or '')[:60]}' irrelevant to '{winner_headline[:60]}' (rel={rel:.3f})")
+            # Orphan it — set cluster_id to NULL so it doesn't pollute
+            conn.execute("UPDATE raw_items SET cluster_id=NULL WHERE id=?", (item["id"],))
+
     conn.execute("DELETE FROM cluster_sources WHERE cluster_id=?", (loser_id,))
     new_count = conn.execute(
         "SELECT COUNT(DISTINCT source_name) as c FROM cluster_sources WHERE cluster_id=?",
