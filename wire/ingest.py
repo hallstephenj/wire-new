@@ -63,18 +63,23 @@ async def _unwrap_google_news_url(url: str, client: httpx.AsyncClient) -> str:
 
     try:
         resp = await asyncio.wait_for(
-            client.head(url, follow_redirects=True),
+            client.head(url, follow_redirects=True, headers={
+                "Accept-Language": "en-US,en;q=0.9",
+            }),
             timeout=8,
         )
         resolved = str(resp.url)
-        # Only cache if we actually resolved to a different domain
-        if "news.google.com" not in resolved:
+        # Only cache if we actually resolved to the real article —
+        # reject Google domains (consent walls, redirects back to gnews)
+        if "google.com" not in resolved and "google.nl" not in resolved:
             if len(_gnews_url_cache) >= _GNEWS_CACHE_MAX:
                 # Evict oldest entries (approx)
                 for k in list(_gnews_url_cache.keys())[:100]:
                     del _gnews_url_cache[k]
             _gnews_url_cache[url] = resolved
             return resolved
+        else:
+            log.debug(f"Google News URL unresolved (consent/redirect): {resolved[:120]}")
     except Exception:
         pass
 
