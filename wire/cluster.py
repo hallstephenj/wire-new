@@ -1,8 +1,11 @@
 import re
+import time
 import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 
+import numpy as np
+from scipy import sparse
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
@@ -92,6 +95,77 @@ def _keyword_overlap_score(kw_a: set, kw_b: set) -> int:
     return len(kw_a & kw_b)
 
 
+# ── TF-IDF cache for poll cycles ──────────────────────────────────────────
+# Reuse the fitted vectorizer + matrix across multiple assign_cluster calls
+# within a single poll cycle instead of rebuilding from scratch each time.
+
+_tfidf_cache = {
+    "vectorizer": None,
+    "matrix": None,        # sparse matrix of existing cluster headlines
+    "cluster_ids": [],     # parallel list of cluster IDs
+    "headlines": [],       # parallel list of headlines
+    "topic_sets": [],      # precomputed topic sets
+    "keyword_sets": [],    # precomputed keyword sets
+    "rows": [],            # full row data (for scoop_boosted_at etc.)
+    "built_at": 0,         # monotonic timestamp
+    "db_cutoff": "",       # the cutoff used to build this cache
+}
+_TFIDF_CACHE_TTL = 10  # seconds — refreshed when stale or when clusters change
+
+
+def invalidate_tfidf_cache():
+    """Force cache rebuild on next assign_cluster call."""
+    _tfidf_cache["built_at"] = 0
+
+
+def _build_tfidf_cache(conn, cutoff: str, now_iso: str):
+    """Rebuild the TF-IDF cache from current clusters."""
+    rows = conn.execute(
+        """SELECT sc.id, sc.rewritten_headline, sc.primary_source, sc.source_count,
+                  co.scoop_boosted_at
+           FROM story_clusters sc
+           LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+           WHERE sc.last_updated > ? AND sc.expires_at > ?""",
+        (cutoff, now_iso)
+    ).fetchall()
+
+    if not rows:
+        _tfidf_cache["vectorizer"] = None
+        _tfidf_cache["matrix"] = None
+        _tfidf_cache["cluster_ids"] = []
+        _tfidf_cache["headlines"] = []
+        _tfidf_cache["topic_sets"] = []
+        _tfidf_cache["keyword_sets"] = []
+        _tfidf_cache["rows"] = []
+        _tfidf_cache["built_at"] = time.monotonic()
+        _tfidf_cache["db_cutoff"] = cutoff
+        return
+
+    headlines = [r["rewritten_headline"] or "" for r in rows]
+
+    vectorizer = TfidfVectorizer(stop_words="english", max_features=5000)
+    matrix = vectorizer.fit_transform(headlines)
+
+    _tfidf_cache["vectorizer"] = vectorizer
+    _tfidf_cache["matrix"] = matrix
+    _tfidf_cache["cluster_ids"] = [r["id"] for r in rows]
+    _tfidf_cache["headlines"] = headlines
+    _tfidf_cache["topic_sets"] = [_extract_topics(h) for h in headlines]
+    _tfidf_cache["keyword_sets"] = [_extract_keywords(h) for h in headlines]
+    _tfidf_cache["rows"] = list(rows)
+    _tfidf_cache["built_at"] = time.monotonic()
+    _tfidf_cache["db_cutoff"] = cutoff
+
+
+def _get_tfidf_cache(conn, cutoff: str, now_iso: str):
+    """Return a fresh or cached TF-IDF index for clustering."""
+    age = time.monotonic() - _tfidf_cache["built_at"]
+    if age < _TFIDF_CACHE_TTL and _tfidf_cache["db_cutoff"] == cutoff:
+        return _tfidf_cache
+    _build_tfidf_cache(conn, cutoff, now_iso)
+    return _tfidf_cache
+
+
 def assign_cluster(conn, headline: str, url: str, source_name: str, category: str, published_at: str = None) -> str:
     """Find or create a cluster for this headline. Returns cluster_id."""
     cfg = load_config()
@@ -106,28 +180,20 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
     now = datetime.now(timezone.utc)
     cutoff = (now - timedelta(hours=lookback)).isoformat()
 
-    # Get recent clusters (include scoop_boosted_at for date-gating)
-    rows = conn.execute(
-        """SELECT sc.id, sc.rewritten_headline, sc.primary_source, sc.source_count,
-                  co.scoop_boosted_at
-           FROM story_clusters sc
-           LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
-           WHERE sc.last_updated > ? AND sc.expires_at > ?""",
-        (cutoff, now.isoformat())
-    ).fetchall()
+    # Get cached TF-IDF index (rebuilt every _TFIDF_CACHE_TTL seconds)
+    cache = _get_tfidf_cache(conn, cutoff, now.isoformat())
+    rows = cache["rows"]
 
-    if rows:
-        cluster_headlines = [r["rewritten_headline"] or "" for r in rows]
+    if rows and cache["vectorizer"] is not None:
+        cluster_headlines = cache["headlines"]
         new_topics = _extract_topics(headline)
 
         # ── Pass 1: TF-IDF similarity ────────────────────────────────────
         best_tfidf_idx = -1
         best_tfidf_sim = 0.0
         try:
-            all_texts = cluster_headlines + [headline]
-            tfidf = TfidfVectorizer(stop_words="english", max_features=5000)
-            matrix = tfidf.fit_transform(all_texts)
-            sims = cosine_similarity(matrix[-1:], matrix[:-1])[0]
+            new_vec = cache["vectorizer"].transform([headline])
+            sims = cosine_similarity(new_vec, cache["matrix"])[0]
             best_tfidf_idx = int(sims.argmax())
             best_tfidf_sim = float(sims[best_tfidf_idx])
         except Exception as e:
@@ -138,8 +204,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
         best_topic_score = 0.0
         best_topic_shared = 0  # number of shared topics
         if new_topics:
-            for i, ch in enumerate(cluster_headlines):
-                cluster_topics = _extract_topics(ch)
+            for i, cluster_topics in enumerate(cache["topic_sets"]):
                 overlap = _topic_overlap_score(new_topics, cluster_topics)
                 shared = len(new_topics & cluster_topics)
                 if overlap > best_topic_score:
@@ -187,8 +252,8 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
         if new_keywords and best_tfidf_sim >= keyword_tfidf_threshold:
             best_kw_idx = -1
             best_kw_count = 0
-            for i, ch in enumerate(cluster_headlines):
-                overlap = _keyword_overlap_score(new_keywords, _extract_keywords(ch))
+            for i, cluster_kw in enumerate(cache["keyword_sets"]):
+                overlap = _keyword_overlap_score(new_keywords, cluster_kw)
                 if overlap > best_kw_count:
                     best_kw_count = overlap
                     best_kw_idx = i
@@ -199,7 +264,8 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
                 _add_to_cluster(conn, cluster_id, source_name, url, headline, category, published_at=published_at)
                 return cluster_id
 
-    # New cluster
+    # New cluster — invalidate cache so next call picks it up
+    invalidate_tfidf_cache()
     ev("cluster_new", headline=headline, source=source_name, category=category)
     cluster_id = str(uuid.uuid4())
     expires = (now + timedelta(days=7)).isoformat()
@@ -311,13 +377,21 @@ def merge_existing_clusters(conn):
     topic_sets = [_extract_topics(h) for h in headlines]
     keyword_sets = [_extract_keywords(h) for h in headlines]
 
-    # Build TF-IDF matrix
+    # Build TF-IDF matrix once, then use sparse dot product to find all
+    # candidate pairs above the lowest threshold in one pass
     try:
         tfidf = TfidfVectorizer(stop_words="english", max_features=5000)
         matrix = tfidf.fit_transform(headlines)
     except Exception as e:
         log.warning(f"Merge TF-IDF error: {e}")
         return 0
+
+    # Compute full pairwise similarity as a sparse matrix (only stores non-zero)
+    # This replaces the O(N²) nested loop with a single matrix multiply
+    sim_matrix = (matrix * matrix.T).toarray()
+
+    # Find candidate pairs above the lowest useful threshold
+    min_threshold = min(merge_kw_tfidf, merge_topic_tfidf, merge_tfidf)
 
     merged = set()
     merge_count = 0
@@ -329,8 +403,15 @@ def merge_existing_clusters(conn):
             if rows[j]["id"] in merged:
                 continue
 
-            # Check TF-IDF
-            sim = cosine_similarity(matrix[i:i+1], matrix[j:j+1])[0][0]
+            sim = sim_matrix[i, j]
+
+            # Fast reject: if TF-IDF is below all thresholds and no topic overlap,
+            # skip the more expensive checks
+            if sim < min_threshold:
+                topic_overlap = _topic_overlap_score(topic_sets[i], topic_sets[j])
+                if topic_overlap < merge_topic_overlap_min and topic_overlap < merge_topic_only:
+                    continue
+
             topic_overlap = _topic_overlap_score(topic_sets[i], topic_sets[j])
             kw_overlap = _keyword_overlap_score(keyword_sets[i], keyword_sets[j])
 
@@ -372,6 +453,8 @@ def merge_existing_clusters(conn):
                 merged.add(loser_id)
                 merge_count += 1
 
+    if merge_count > 0:
+        invalidate_tfidf_cache()
     conn.commit()
     log.info(f"Merged {merge_count} duplicate clusters")
     return merge_count

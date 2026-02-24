@@ -186,10 +186,23 @@ async def fetch_site(url: str, parser_key: str, max_headlines: int = 20) -> list
 
 # ── Similarity check against existing clusters ────────────────────────
 
-def _find_matching_cluster(headline: str, threshold: float = 0.30) -> str | None:
-    """Check if a headline matches any existing cluster via TF-IDF similarity."""
-    from wire.config import load_config
+# ── Cached reference matcher ──────────────────────────────────────────
+# Builds a TF-IDF index once per check_references run, reuses for all
+# headline matching within that run.
+
+_ref_match_cache = {"vectorizer": None, "matrix": None, "rows": [], "built_at": 0}
+_REF_CACHE_TTL = 30  # seconds
+
+
+def _build_ref_match_cache():
+    """Build/refresh the reference matching TF-IDF index."""
+    import time as _time
     from datetime import timedelta
+    from wire.config import load_config
+    now_mono = _time.monotonic()
+    if _ref_match_cache["vectorizer"] and (now_mono - _ref_match_cache["built_at"]) < _REF_CACHE_TTL:
+        return
+
     cfg = load_config()
     lookback = cfg["clustering"]["lookback_hours"]
     now = datetime.now(timezone.utc)
@@ -197,25 +210,40 @@ def _find_matching_cluster(headline: str, threshold: float = 0.30) -> str | None
 
     conn = get_conn()
     rows = conn.execute(
-        "SELECT id, rewritten_headline FROM story_clusters WHERE last_updated > ? AND expires_at > ?",
+        "SELECT id, rewritten_headline FROM story_clusters WHERE last_updated > ? AND expires_at > ? ORDER BY source_count DESC LIMIT 2000",
         (cutoff, now.isoformat())
     ).fetchall()
     conn.close()
 
     if not rows:
+        _ref_match_cache.update({"vectorizer": None, "matrix": None, "rows": [], "built_at": now_mono})
+        return
+
+    headlines = [r["rewritten_headline"] or "" for r in rows]
+    vectorizer = TfidfVectorizer(stop_words="english", max_features=5000)
+    matrix = vectorizer.fit_transform(headlines)
+    _ref_match_cache.update({"vectorizer": vectorizer, "matrix": matrix, "rows": list(rows), "built_at": now_mono})
+
+
+def _invalidate_ref_cache():
+    """Force rebuild on next match attempt."""
+    _ref_match_cache["built_at"] = 0
+
+
+def _find_matching_cluster(headline: str, threshold: float = 0.30) -> str | None:
+    """Check if a headline matches any existing cluster via cached TF-IDF index."""
+    _build_ref_match_cache()
+
+    if not _ref_match_cache["rows"] or _ref_match_cache["vectorizer"] is None:
         return None
 
-    cluster_headlines = [r["rewritten_headline"] or "" for r in rows]
-
     try:
-        all_texts = cluster_headlines + [headline]
-        tfidf = TfidfVectorizer(stop_words="english", max_features=5000)
-        matrix = tfidf.fit_transform(all_texts)
-        sims = cosine_similarity(matrix[-1:], matrix[:-1])[0]
+        new_vec = _ref_match_cache["vectorizer"].transform([headline])
+        sims = cosine_similarity(new_vec, _ref_match_cache["matrix"])[0]
         best_idx = int(sims.argmax())
         best_sim = float(sims[best_idx])
         if best_sim >= threshold:
-            return rows[best_idx]["id"]
+            return _ref_match_cache["rows"][best_idx]["id"]
     except Exception as e:
         log.warning(f"TF-IDF similarity check error: {e}")
 
@@ -238,6 +266,9 @@ async def check_references(on_progress=None) -> dict:
     if not sites:
         log.info("No enabled reference sites, skipping check")
         return {"sites_checked": 0, "headlines_found": 0, "gaps_found": 0, "gaps_filled": 0}
+
+    # Pre-build the matching index once for the entire reference check
+    _build_ref_match_cache()
 
     now = datetime.now(timezone.utc).isoformat()
     total_found = 0
@@ -293,6 +324,8 @@ async def check_references(on_progress=None) -> dict:
                     ingested = await _poll_single_feed(search_url, "Google News", "general")
 
                     if ingested > 0:
+                        # Invalidate cache since new clusters may have been created
+                        _invalidate_ref_cache()
                         # Re-check if a cluster now covers this headline
                         new_match = _find_matching_cluster(headline_text, threshold=0.25)
                         if new_match:

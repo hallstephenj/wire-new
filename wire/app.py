@@ -117,14 +117,6 @@ async def startup_backfill():
 
     def cluster_progress(done, total):
         boot_state["clustering_progress"] = done / total
-        # Periodically update cluster count
-        if done % 10 == 0 or done == total:
-            try:
-                c = get_conn()
-                boot_state["clusters"] = c.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]
-                c.close()
-            except Exception:
-                pass
 
     try:
         await backfill_48h(on_progress=cluster_progress)

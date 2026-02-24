@@ -415,6 +415,7 @@ async def backfill_48h(on_progress=None):
     log.info("Starting deep backfill sweep...")
     ev("ingest_start", job="backfill")
     total = 0
+    completed = 0
     # Build flat list of all operations for progress tracking
     # Use time-scoped queries to reach back further than default RSS window
     ops = []
@@ -426,13 +427,25 @@ async def backfill_48h(on_progress=None):
     db_feeds = _load_feeds_from_db()
     for category, feed in db_feeds:
         ops.append((feed["url"], feed["name"], category))
-    for idx, (url, name, category) in enumerate(ops):
-        try:
-            n = await _poll_single_feed(url, name, category)
-            total += n
-        except Exception as e:
-            log.warning(f"Backfill error for '{name}': {e}")
-        if on_progress:
-            on_progress(idx + 1, len(ops))
+
+    sem = asyncio.Semaphore(8)
+    total_ops = len(ops)
+    _progress_batch = max(1, total_ops // 20)  # update progress ~20 times
+
+    async def _backfill_one(url, name, category):
+        nonlocal total, completed
+        async with sem:
+            try:
+                n = await _poll_single_feed(url, name, category)
+                total += n
+            except Exception as e:
+                log.warning(f"Backfill error for '{name}': {e}")
+            completed += 1
+            if on_progress and completed % _progress_batch == 0:
+                on_progress(completed, total_ops)
+
+    await asyncio.gather(*[_backfill_one(u, n, c) for u, n, c in ops])
+    if on_progress:
+        on_progress(total_ops, total_ops)
     ev("ingest_done", job="backfill", items=total)
     log.info(f"Backfill complete: {total} new items")

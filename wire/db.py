@@ -20,6 +20,9 @@ def get_conn():
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA cache_size=-64000")   # 64MB page cache
+    conn.execute("PRAGMA temp_store=MEMORY")
     return conn
 
 def init_db():
@@ -78,6 +81,7 @@ def init_db():
     );
     CREATE INDEX IF NOT EXISTS idx_curation_pinned ON curation_overrides(pinned);
     CREATE INDEX IF NOT EXISTS idx_curation_hidden ON curation_overrides(hidden);
+    CREATE INDEX IF NOT EXISTS idx_curation_composite ON curation_overrides(cluster_id, hidden, pinned, boost);
 
     CREATE TABLE IF NOT EXISTS curation_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
