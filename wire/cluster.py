@@ -51,6 +51,9 @@ TOPIC_PATTERNS = [
     # Programs
     r'\bprecheck\b', r'\bglobal entry\b', r'\bmedicare\b', r'\bmedicaid\b',
     r'\bsocial security\b',
+    # Geopolitical
+    r'\bukraine\b', r'\brussia\b', r'\bgazan?\b', r'\bisrael\b',
+    r'\btaiwan\b', r'\bnato\b', r'\bboeing\b',
     # Events
     r'\bshutdown\b', r'\bceasefire\b', r'\bbrexit\b', r'\bimpeach',
 ]
@@ -118,6 +121,7 @@ _tfidf_cache = {
     "headlines": [],       # parallel list of headlines
     "topic_sets": [],      # precomputed topic sets
     "keyword_sets": [],    # precomputed keyword sets
+    "embeddings": None,    # sentence embeddings (numpy array or None)
     "rows": [],            # full row data (for scoop_boosted_at etc.)
     "built_at": 0,         # monotonic timestamp
     "db_cutoff": "",       # the cutoff used to build this cache
@@ -148,6 +152,7 @@ def _build_tfidf_cache(conn, cutoff: str, now_iso: str):
         _tfidf_cache["headlines"] = []
         _tfidf_cache["topic_sets"] = []
         _tfidf_cache["keyword_sets"] = []
+        _tfidf_cache["embeddings"] = None
         _tfidf_cache["rows"] = []
         _tfidf_cache["built_at"] = time.monotonic()
         _tfidf_cache["db_cutoff"] = cutoff
@@ -164,6 +169,17 @@ def _build_tfidf_cache(conn, cutoff: str, now_iso: str):
     _tfidf_cache["headlines"] = headlines
     _tfidf_cache["topic_sets"] = [_extract_topics(h) for h in headlines]
     _tfidf_cache["keyword_sets"] = [_extract_keywords(h) for h in headlines]
+
+    # Pre-compute sentence embeddings for semantic matching (Pass 4)
+    try:
+        model = _get_embed_model()
+        _tfidf_cache["embeddings"] = model.encode(
+            headlines, normalize_embeddings=True, show_progress_bar=False
+        )
+    except Exception as e:
+        log.warning(f"Embedding cache build error: {e}")
+        _tfidf_cache["embeddings"] = None
+
     _tfidf_cache["rows"] = list(rows)
     _tfidf_cache["built_at"] = time.monotonic()
     _tfidf_cache["db_cutoff"] = cutoff
@@ -281,6 +297,27 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
                    similarity=round(best_tfidf_sim, 3), keyword_overlap=best_kw_count, method="keyword+tfidf")
                 _add_to_cluster(conn, cluster_id, source_name, url, headline, category, published_at=published_at)
                 return cluster_id
+
+        # ── Pass 4: Sentence embedding similarity ───────────────────────
+        # Catches semantic paraphrases that TF-IDF/topic/keyword miss
+        embed_threshold = algo.get("embed_threshold", 0.72)
+        cached_embeddings = cache.get("embeddings")
+        if cached_embeddings is not None:
+            try:
+                model = _get_embed_model()
+                new_embed = model.encode([headline], normalize_embeddings=True, show_progress_bar=False)
+                embed_sims = (new_embed @ cached_embeddings.T)[0]
+                best_embed_idx = int(embed_sims.argmax())
+                best_embed_sim = float(embed_sims[best_embed_idx])
+
+                if best_embed_sim >= embed_threshold and best_tfidf_sim >= TFIDF_FLOOR and _scoop_date_ok(best_embed_idx):
+                    cluster_id = rows[best_embed_idx]["id"]
+                    ev("cluster_hit", headline=headline, matched=rows[best_embed_idx]["rewritten_headline"],
+                       similarity=round(best_embed_sim, 3), tfidf=round(best_tfidf_sim, 3), method="embedding")
+                    _add_to_cluster(conn, cluster_id, source_name, url, headline, category, published_at=published_at)
+                    return cluster_id
+            except Exception as e:
+                log.warning(f"Embedding pass error: {e}")
 
     # New cluster — invalidate cache so next call picks it up
     invalidate_tfidf_cache()

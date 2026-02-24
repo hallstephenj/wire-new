@@ -192,6 +192,8 @@ def init_db():
         conn.execute("ALTER TABLE curation_overrides ADD COLUMN expiry_override TEXT")
     if "scoop_boosted_at" not in co_cols:
         conn.execute("ALTER TABLE curation_overrides ADD COLUMN scoop_boosted_at TEXT")
+    if "market_mover" not in co_cols:
+        conn.execute("ALTER TABLE curation_overrides ADD COLUMN market_mover INTEGER DEFAULT 0")
 
     # Composite index (created after migrations so boost column exists)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_curation_composite ON curation_overrides(cluster_id, hidden, pinned, boost)")
@@ -276,6 +278,31 @@ def init_db():
                     )
         except Exception:
             pass
+
+    # Migration: replace Google News proxy feeds with direct RSS URLs
+    _gnews_feed_replacements = [
+        ("https://news.google.com/rss/search?q=site:wsj.com+markets&hl=en-US&gl=US&ceid=US:en",
+         "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"),
+        ("https://news.google.com/rss/search?q=site:bloomberg.com+markets&hl=en-US&gl=US&ceid=US:en",
+         "https://feeds.bloomberg.com/markets/news.rss"),
+        ("https://news.google.com/rss/search?q=site:ft.com+markets&hl=en-US&gl=US&ceid=US:en",
+         "https://www.ft.com/markets?format=rss"),
+        ("https://news.google.com/rss/search?q=site:reuters.com+politics&hl=en-US&gl=US&ceid=US:en",
+         "https://www.reuters.com/world/us/rss"),
+        ("https://news.google.com/rss/search?q=site:reuters.com&hl=en-US&gl=US&ceid=US:en",
+         "https://www.reuters.com/rssFeed/topNews"),
+        ("https://news.google.com/rss/search?q=site:reuters.com+world&hl=en-US&gl=US&ceid=US:en",
+         "https://www.reuters.com/world/rss"),
+    ]
+    for old_url, new_url in _gnews_feed_replacements:
+        conn.execute(
+            "UPDATE feed_sources SET url=?, updated_at=? WHERE url=?",
+            (new_url, datetime.now(timezone.utc).isoformat(), old_url)
+        )
+    # Also update the FT name to match the new feed
+    conn.execute(
+        "UPDATE feed_sources SET name='Financial Times Markets' WHERE name='Financial Times' AND category='markets'"
+    )
 
     conn.commit()
     conn.close()

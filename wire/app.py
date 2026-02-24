@@ -18,7 +18,7 @@ from wire.cluster import assign_cluster, merge_existing_clusters
 from wire.events import snapshot as events_snapshot
 from wire.scores import all_scores, get_score
 from wire.reference import run_reference_check
-from wire.algorithm import get_active_version, build_source_quality_case, build_reputable_sources_sql, build_hot_score_sql, list_versions, set_active_version
+from wire.algorithm import get_active_version, build_source_quality_case, build_reputable_sources_sql, build_hot_score_sql, build_market_mover_case_sql, list_versions, set_active_version
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("wire")
@@ -266,6 +266,8 @@ async def get_stories(
     # Deprioritize "world" in the ALL view
     world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if (category == "all" and algo.get("world_deprio", True)) else "0+0"
     hot_score = build_hot_score_sql(algo)
+    market_mover_case = build_market_mover_case_sql(algo)
+    boosted_hot_score = f"({hot_score} * ({market_mover_case}))"
     reputable_sources_sql = build_reputable_sources_sql(algo)
     min_reputable = algo["min_reputable_sources"]
     if sort == "hot":
@@ -276,7 +278,7 @@ async def get_stories(
             where.append(f"({reputable_filter} OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))")
         else:
             where.append(reputable_filter)
-        order = f"{sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC"
+        order = f"{sort_prefix}, {world_deprio}, {boosted_hot_score} DESC, sc.published_at DESC"
     else:
         # Ticker: pure chronological, no boost/pin/breaking reordering
         order = "sc.published_at DESC"
@@ -289,6 +291,7 @@ async def get_stories(
                sc.source_count, sc.first_seen, sc.last_updated, sc.published_at,
                COALESCE(co.breaking, 0) as breaking,
                co.scoop_boosted_at,
+               COALESCE(co.market_mover, 0) as market_mover,
                (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
         FROM story_clusters sc
         LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
@@ -338,6 +341,7 @@ async def get_stories(
             "last_updated": r["last_updated"],
             "breaking": bool(r["breaking"]),
             "scoop": bool(r["scoop_boosted_at"]),
+            "market_mover": r["market_mover"],
             "other_sources": other_sources,
             "items": items,
         })
@@ -421,6 +425,8 @@ async def audit_data(mode: str = Query(..., pattern="^(ranking|clustering|catego
 
     # Shared SQL fragments
     hot_score = build_hot_score_sql(algo)
+    market_mover_case = build_market_mover_case_sql(algo)
+    boosted_hot_score = f"({hot_score} * ({market_mover_case}))"
     reputable_sources_sql = build_reputable_sources_sql(algo)
     min_reputable = algo["min_reputable_sources"]
     boost_hours = algo.get("scoop_boost_hours", 4)
@@ -453,7 +459,7 @@ async def audit_data(mode: str = Query(..., pattern="^(ranking|clustering|catego
               AND (co.hidden IS NULL OR co.hidden = 0)
               AND {reputable_clause}
               {general_clause}
-            ORDER BY {sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC
+            ORDER BY {sort_prefix}, {world_deprio}, {boosted_hot_score} DESC, sc.published_at DESC
             LIMIT 20
         """, (now,)).fetchall()
         result["items"] = _enrich(rows)
@@ -1022,6 +1028,8 @@ async def river_stories(
     # Deprioritize "world" in the ALL view
     world_deprio = "CASE WHEN COALESCE(co.category_override, sc.category) = 'world' THEN 1 ELSE 0 END" if (category == "all" and algo.get("world_deprio", True)) else "0+0"
     hot_score = build_hot_score_sql(algo)
+    market_mover_case_river = build_market_mover_case_sql(algo)
+    boosted_hot_score_river = f"({hot_score} * ({market_mover_case_river}))"
     reputable_sources_sql = build_reputable_sources_sql(algo)
     min_reputable = algo["min_reputable_sources"]
     if sort == "hot":
@@ -1031,7 +1039,7 @@ async def river_stories(
             where.append(f"({reputable_filter} OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))")
         else:
             where.append(reputable_filter)
-        order = f"{sort_prefix}, {world_deprio}, {hot_score} DESC, sc.published_at DESC"
+        order = f"{sort_prefix}, {world_deprio}, {boosted_hot_score_river} DESC, sc.published_at DESC"
     else:
         # Ticker: pure chronological, no boost/pin/breaking reordering
         order = "sc.published_at DESC"
@@ -1050,6 +1058,7 @@ async def river_stories(
                COALESCE(co.locked, 0) as locked,
                COALESCE(co.breaking, 0) as breaking,
                COALESCE(co.boost, 0) as boost,
+               COALESCE(co.market_mover, 0) as market_mover,
                co.note,
                co.pin_rank,
                (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
@@ -1102,6 +1111,7 @@ async def river_stories(
             "locked": bool(r["locked"]),
             "breaking": bool(r["breaking"]),
             "boost": r["boost"],
+            "market_mover": r["market_mover"],
             "note": r["note"],
             "other_sources": other_sources,
             "items": [{"id": i["id"], "headline": i["original_headline"], "url": i["source_url"],

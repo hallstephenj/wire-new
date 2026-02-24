@@ -164,6 +164,8 @@ VERSIONS = {
         "keyword_tfidf_threshold": 0.15,
         "min_keyword_overlap": 4,
         "lookback_hours": 72,
+        # ── Embedding pass (Pass 4 in assign_cluster) ──
+        "embed_threshold": 0.72,
         # ── Scoop boost ──
         "scoop_enabled": True,
         "scoop_sources": [
@@ -176,6 +178,8 @@ VERSIONS = {
         "scoop_patterns": [r"(?i)\bscoop\b", r"(?i)\bexclusive\b", r"(?i)^sources?\b"],
         "scoop_boost_hours": 4,
         "scoop_min_sources_after": 2,
+        # ── Market mover boost ──
+        "market_mover_multipliers": {2: 2.0, 3: 3.0},
     },
 }
 
@@ -206,6 +210,18 @@ def build_reputable_sources_sql(version: dict) -> str:
     """Build a SQL tuple string of reputable source names."""
     quoted = ",".join(f"'{_sql_quote(s)}'" for s in version["reputable_sources"])
     return f"({quoted})"
+
+
+def build_market_mover_case_sql(version: dict) -> str:
+    """Build a SQL CASE expression for market mover hot score multiplier."""
+    multipliers = version.get("market_mover_multipliers", {})
+    if not multipliers:
+        return "1.0"
+    lines = ["CASE"]
+    for score, mult in sorted(multipliers.items(), reverse=True):
+        lines.append(f"    WHEN COALESCE(co.market_mover, 0) = {score} THEN {mult}")
+    lines.append("    ELSE 1.0 END")
+    return "\n".join(lines)
 
 
 def build_hot_score_sql(version: dict) -> str:

@@ -11,7 +11,7 @@ from wire.events import push as ev
 
 log = logging.getLogger("wire.rewrite")
 
-SYSTEM_PROMPT = """You are a Bloomberg terminal news wire editor. You have two jobs for each cluster of headlines about the same story:
+SYSTEM_PROMPT = """You are a Bloomberg terminal news wire editor. You have three jobs for each cluster of headlines about the same story:
 
 JOB 1 — REWRITE: Synthesize the cluster of headlines into a single Bloomberg-wire-style headline.
 - ALL CAPS, concise, factual, present tense, active voice
@@ -30,16 +30,22 @@ JOB 2 — CATEGORIZE: Assign each cluster to exactly ONE category:
 
 IMPORTANT: Stories about tariffs, trade policy, or government regulation are POLITICS unless they specifically focus on stock price impact (then MARKETS). Stories about science, space, or medicine without a tech angle are GENERAL. Product deal roundups and "best of" lists are GENERAL. Blog meta-posts ("Adding TILs to my blog") are GENERAL. Entertainment/music/media industry business stories are GENERAL, not MARKETS — "capital" or "investment" in a headline does not make it MARKETS unless it involves public markets or financial instruments. International crime, drug enforcement, and military operations outside the US are WORLD, not POLITICS. Clickbait or vague sensational headlines ("reveals the TRUTH", "no one wanted to admit") are GENERAL.
 
+JOB 3 — MARKET IMPACT: Rate how likely this story is to move financial markets (0-3):
+- 3 (HIGH): Supply chain disruptions, major regulatory actions, earnings surprises, M&A announcements, sanctions, geopolitical threats to key industries (e.g. Taiwan/chips), central bank policy changes, trade wars
+- 2 (MEDIUM): Large company strategy shifts, significant layoffs (1000+), mega-cap product launches, trade policy changes, major data breaches at public companies, important economic data releases
+- 1 (LOW): Industry trends, minor product updates, executive commentary, analyst predictions, startup funding rounds
+- 0 (NONE): Human interest, lifestyle, entertainment, niche tech, gadget reviews, opinion pieces, local news
+
 For each numbered cluster, respond with EXACTLY this format:
-1. CATEGORY | REWRITTEN HEADLINE
-2. CATEGORY | REWRITTEN HEADLINE
+1. CATEGORY | REWRITTEN HEADLINE | MARKET_SCORE
+2. CATEGORY | REWRITTEN HEADLINE | MARKET_SCORE
 ...
 
 Examples:
-1. TECH | APPLE PLANS LOW-COST MACBOOK IN MULTIPLE COLORS FOR 2026: BLOOMBERG
-2. POLITICS | TRUMP VOWS NEW TARIFFS AFTER SUPREME COURT STRIKES DOWN EMERGENCY POWERS
-3. MARKETS | OPENAI NOW TARGETING MORE THAN $280B IN REVENUE BY 2030: CNBC
-4. WORLD | EARTHQUAKE KILLS AT LEAST 200 IN WESTERN TURKEY"""
+1. TECH | APPLE PLANS LOW-COST MACBOOK IN MULTIPLE COLORS FOR 2026: BLOOMBERG | 2
+2. POLITICS | TRUMP VOWS NEW TARIFFS AFTER SUPREME COURT STRIKES DOWN EMERGENCY POWERS | 3
+3. MARKETS | OPENAI NOW TARGETING MORE THAN $280B IN REVENUE BY 2030: CNBC | 2
+4. WORLD | EARTHQUAKE KILLS AT LEAST 200 IN WESTERN TURKEY | 1"""
 
 VALID_CATEGORIES = {"tech", "markets", "politics", "world", "general"}
 
@@ -76,18 +82,27 @@ def _parse_rewrite_response(text, clusters, conn):
             if line.startswith(prefix):
                 line = line[len(prefix):].strip()
 
-        # Parse "CATEGORY | HEADLINE"
+        # Parse "CATEGORY | HEADLINE | MARKET_SCORE"
         category = None
         rewritten = line
+        market_mover = 0
         if "|" in line:
-            parts = line.split("|", 1)
+            parts = line.split("|")
             cat_candidate = parts[0].strip().lower()
             if cat_candidate in VALID_CATEGORIES:
                 category = cat_candidate
                 rewritten = parts[1].strip()
+                # Extract market score from third field if present
+                if len(parts) >= 3:
+                    try:
+                        score = int(parts[2].strip())
+                        if 0 <= score <= 3:
+                            market_mover = score
+                    except (ValueError, IndexError):
+                        pass
 
         if rewritten and len(rewritten) <= 120:
-            ev("rewrite", before=cluster["current_headline"], after=rewritten, category=category or "unchanged")
+            ev("rewrite", before=cluster["current_headline"], after=rewritten, category=category or "unchanged", market_mover=market_mover)
             conn.execute("UPDATE story_clusters SET rewritten_headline=? WHERE id=?",
                        (rewritten, cluster["id"]))
             rewrites += 1
@@ -96,6 +111,13 @@ def _parse_rewrite_response(text, clusters, conn):
             conn.execute("UPDATE story_clusters SET category=? WHERE id=?",
                        (category, cluster["id"]))
             recats += 1
+
+        # Write market_mover score to curation_overrides
+        conn.execute("""
+            INSERT INTO curation_overrides (cluster_id, market_mover, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(cluster_id) DO UPDATE SET market_mover=?, updated_at=datetime('now')
+        """, (cluster["id"], market_mover, market_mover))
 
     return rewrites, recats
 

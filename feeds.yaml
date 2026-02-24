@@ -124,9 +124,9 @@ feeds:
       url: "https://futurism.com/feed"
 
   markets:
-    # #2 Wall Street Journal (8.48%) — no direct tech RSS, use markets
+    # #2 Wall Street Journal (8.48%)
     - name: "Wall Street Journal"
-      url: "https://news.google.com/rss/search?q=site:wsj.com+markets&hl=en-US&gl=US&ceid=US:en"
+      url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"
     # #27 Fox Business (0.49%)
     - name: "Fox Business"
       url: "https://www.foxbusiness.com/rss.xml?category=markets"
@@ -142,11 +142,11 @@ feeds:
     - name: "Yahoo Finance"
       url: "https://finance.yahoo.com/news/rssindex"
     - name: "Bloomberg Markets"
-      url: "https://news.google.com/rss/search?q=site:bloomberg.com+markets&hl=en-US&gl=US&ceid=US:en"
+      url: "https://feeds.bloomberg.com/markets/news.rss"
     - name: "CNBC Markets"
       url: "https://www.cnbc.com/id/20910258/device/rss/rss.html"
-    - name: "Financial Times"
-      url: "https://news.google.com/rss/search?q=site:ft.com+markets&hl=en-US&gl=US&ceid=US:en"
+    - name: "Financial Times Markets"
+      url: "https://www.ft.com/markets?format=rss"
 
   politics:
     # #18 Politico (1.07%)
@@ -169,7 +169,7 @@ feeds:
     - name: "Politico Congress"
       url: "https://www.politico.com/rss/congress.xml"
     - name: "Reuters Politics"
-      url: "https://news.google.com/rss/search?q=site:reuters.com+politics&hl=en-US&gl=US&ceid=US:en"
+      url: "https://www.reuters.com/world/us/rss"
     - name: "NBC Politics"
       url: "https://feeds.nbcnews.com/nbcnews/public/politics"
     # Memeorandum leaderboard additions
@@ -197,7 +197,7 @@ feeds:
     - name: "Associated Press"
       url: "https://rsshub.app/apnews/topics/apf-topnews"
     - name: "Reuters Top News"
-      url: "https://news.google.com/rss/search?q=site:reuters.com&hl=en-US&gl=US&ceid=US:en"
+      url: "https://www.reuters.com/rssFeed/topNews"
     - name: "CNN"
       url: "https://rss.cnn.com/rss/edition.rss"
     - name: "NPR"
@@ -237,7 +237,7 @@ feeds:
     - name: "Al Jazeera"
       url: "https://www.aljazeera.com/xml/rss/all.xml"
     - name: "Reuters World"
-      url: "https://news.google.com/rss/search?q=site:reuters.com+world&hl=en-US&gl=US&ceid=US:en"
+      url: "https://www.reuters.com/world/rss"
     - name: "France24"
       url: "https://www.france24.com/en/rss"
     - name: "DW News"
