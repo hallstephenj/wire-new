@@ -386,7 +386,7 @@ async def audit_data():
             result.append({
                 "id": cid,
                 "headline": r["rewritten_headline"],
-                "original_headline": r.get("original_headline", ""),
+                "original_headline": r["original_headline"] or "",
                 "url": r["primary_url"],
                 "source": r["primary_source"],
                 "category": r["category"],
