@@ -114,6 +114,14 @@ feeds:
     # #50 Krebs on Security (0.20%)
     - name: "Krebs on Security"
       url: "https://krebsonsecurity.com/feed/"
+    # 9to5 network
+    - name: "9to5Mac"
+      url: "https://9to5mac.com/feed/"
+    - name: "Electrek"
+      url: "https://electrek.co/feed/"
+    # Futurism (mem #100)
+    - name: "Futurism"
+      url: "https://futurism.com/feed"
 
   markets:
     # #2 Wall Street Journal (8.48%) — no direct tech RSS, use markets
@@ -164,6 +172,25 @@ feeds:
       url: "https://news.google.com/rss/search?q=site:reuters.com+politics&hl=en-US&gl=US&ceid=US:en"
     - name: "NBC Politics"
       url: "https://feeds.nbcnews.com/nbcnews/public/politics"
+    # Memeorandum leaderboard additions
+    - name: "Vox"
+      url: "https://www.vox.com/rss/index.xml"
+    - name: "New York Post"
+      url: "https://nypost.com/feed/"
+    - name: "HuffPost"
+      url: "https://www.huffpost.com/section/politics/feed"
+    - name: "Slate"
+      url: "https://slate.com/feeds/all.rss"
+    - name: "The Daily Beast"
+      url: "https://feeds.thedailybeast.com/rss/articles"
+    - name: "The Intercept"
+      url: "https://theintercept.com/feed/?rss"
+    - name: "Mother Jones"
+      url: "https://www.motherjones.com/feed/"
+    - name: "Talking Points Memo"
+      url: "https://talkingpointsmemo.com/feed"
+    - name: "Newsweek"
+      url: "https://www.newsweek.com/rss"
 
   general:
     # Major breaking news feeds (broad coverage, all categories)
@@ -189,6 +216,14 @@ feeds:
       url: "https://feeds.washingtonpost.com/rss/national"
     - name: "PBS NewsHour"
       url: "https://www.pbs.org/newshour/feeds/rss/headlines"
+    - name: "Los Angeles Times"
+      url: "https://www.latimes.com/world-nation/rss2.0.xml"
+    - name: "Fox News"
+      url: "https://moxie.foxnews.com/google-publisher/latest.xml"
+    - name: "New York Magazine"
+      url: "https://nymag.com/feed/full.rss"
+    - name: "Time"
+      url: "https://time.com/feed/"
 
   world:
     # #47 South China Morning Post (0.21%)
