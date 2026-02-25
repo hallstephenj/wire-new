@@ -53,6 +53,7 @@ async def startup_backfill():
         boot_state["clustering_progress"] = 1
         boot_state["rewriting_progress"] = 1
         # Still run dedup merge on existing clusters
+        mark_boot_complete()  # allow embedding model to load
         try:
             conn = get_conn()
             merged = merge_existing_clusters(conn)
