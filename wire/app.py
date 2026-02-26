@@ -35,6 +35,7 @@ boot_state = {
     "polling_progress": 0,
     "clustering_progress": 0,
     "rewriting_progress": 0,
+    "build": "2026-02-26a",  # version marker for deploy verification
 }
 
 _boot_task = None

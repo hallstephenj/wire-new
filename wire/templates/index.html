@@ -701,7 +701,14 @@ async function bootCheck() {
                 const r = await fetch('/api/boot-status');
                 const s = await r.json();
                 updateBootUI(s);
-                if (s.phase === 'ready') clearInterval(poll);
+                if (s.phase === 'ready') {
+                    clearInterval(poll);
+                    // Auto-dismiss overlay after a short pause to show completion
+                    setTimeout(() => {
+                        document.getElementById('boot-overlay').classList.add('hidden');
+                        fetchStories();
+                    }, 1500);
+                }
             } catch (_) {}
         }, 2000);
     } catch (_) {
