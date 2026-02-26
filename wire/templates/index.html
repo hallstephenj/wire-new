@@ -866,10 +866,13 @@ function toggleItems(id) {
 }
 
 /* ── Fetch & pagination ───────────────────────────────────────────── */
+let _refreshTimer = null;
+
 async function fetchStories(append) {
     try {
         const url = `/api/stories?sort=${currentSort}&category=${currentCat}&limit=${PAGE_SIZE}&offset=${currentOffset}`;
         const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
         const data = await resp.json();
 
         const container = document.getElementById('stories');
@@ -885,7 +888,7 @@ async function fetchStories(append) {
         if (append) {
             container.insertAdjacentHTML('beforeend', html);
         } else {
-            container.innerHTML = html || '<div class="loading">No stories yet. Feeds loading...</div>';
+            container.innerHTML = html || '<div class="loading">No stories yet. Feeds are still loading — this page will refresh automatically.</div>';
         }
 
         const newIds = new Set(data.stories.map(s => s.id));
@@ -902,8 +905,19 @@ async function fetchStories(append) {
 
         document.getElementById('status-total').textContent = `${data.total} stories`;
         document.getElementById('status-updated').textContent = `updated ${new Date(data.updated_at).toLocaleTimeString()}`;
+
+        // Start periodic refresh (every 30s)
+        if (!_refreshTimer) {
+            _refreshTimer = setInterval(() => { currentOffset = 0; fetchStories(); }, 30000);
+        }
     } catch (e) {
         console.error('Fetch error:', e);
+        const container = document.getElementById('stories');
+        if (container.querySelector('.loading')) {
+            container.innerHTML = '<div class="loading">Loading stories... retrying shortly.</div>';
+        }
+        // Retry after 5 seconds
+        setTimeout(() => fetchStories(), 5000);
     }
 }
 

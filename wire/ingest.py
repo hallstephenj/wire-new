@@ -369,18 +369,23 @@ async def search_sweep(on_progress=None):
     queries = cfg.get("search", {}).get("queries", [])
     log.info("Running search sweep...")
     ev("ingest_start", job="search")
-    # Use Google News RSS as search proxy
+    # Use Google News RSS as search proxy — skip if consent wall active
     count = 0
-    for idx, query in enumerate(queries):
-        try:
-            cat = _query_to_category(query)
-            url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}&hl=en-US&gl=US&ceid=US:en"
-            n = await _poll_single_feed(url, "Google News", cat)
-            count += n
-        except Exception as e:
-            log.warning(f"Search sweep error for '{query}': {e}")
+    if _gnews_blocked:
+        log.info("Skipping search sweep (Google News consent wall active)")
         if on_progress:
-            on_progress(idx + 1, len(queries))
+            on_progress(len(queries), len(queries))
+    else:
+        for idx, query in enumerate(queries):
+            try:
+                cat = _query_to_category(query)
+                url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}&hl=en-US&gl=US&ceid=US:en"
+                n = await _poll_single_feed(url, "Google News", cat)
+                count += n
+            except Exception as e:
+                log.warning(f"Search sweep error for '{query}': {e}")
+            if on_progress:
+                on_progress(idx + 1, len(queries))
     ev("ingest_done", job="search", items=count)
     log.info(f"Search sweep ingested {count} new items")
     if count > 0:
@@ -483,11 +488,14 @@ async def backfill_48h(on_progress=None):
     # Build flat list of all operations for progress tracking
     # Use time-scoped queries to reach back further than default RSS window
     ops = []
-    for category, queries in BACKFILL_QUERIES.items():
-        for query in queries:
-            for time_scope in ["when:1d", "when:2d", "when:3d"]:
-                url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}+{time_scope}&hl=en-US&gl=US&ceid=US:en"
-                ops.append((url, "Google News", category))
+    if not _gnews_blocked:
+        for category, queries in BACKFILL_QUERIES.items():
+            for query in queries:
+                for time_scope in ["when:1d", "when:2d", "when:3d"]:
+                    url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}+{time_scope}&hl=en-US&gl=US&ceid=US:en"
+                    ops.append((url, "Google News", category))
+    else:
+        log.info("Skipping Google News backfill queries (consent wall active)")
     db_feeds = _load_feeds_from_db()
     for category, feed in db_feeds:
         ops.append((feed["url"], feed["name"], category))
