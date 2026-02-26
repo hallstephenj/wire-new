@@ -84,31 +84,26 @@ async def startup_backfill():
         log.warning(f"Boot reference check error: {e}")
     boot_state["reference_progress"] = 1
 
-    # Phase 1: polling — 3 passes of (poll_feeds + search_sweep)
-    # Progress is tracked per-feed across all 3 passes
+    # Phase 1: polling — single pass of (poll_feeds + search_sweep)
+    # Scheduler handles subsequent passes after boot completes
     boot_state["phase"] = "polling"
-    num_passes = 3
-    for i in range(num_passes):
-        boot_state["detail"] = f"Pass {i+1}/{num_passes}"
-        log.info(f"Boot phase 1 — polling pass {i+1}/{num_passes}")
+    boot_state["detail"] = ""
+    log.info("Boot phase 1 — polling")
 
-        def poll_progress(done, total, _pass=i):
-            # Each pass has poll_feeds portion (0-0.8) + search_sweep portion (0.8-1.0)
-            pass_frac = (_pass + (done / total) * 0.8) / num_passes
-            boot_state["polling_progress"] = min(pass_frac, 0.99)
+    def poll_progress(done, total):
+        boot_state["polling_progress"] = min((done / total) * 0.8, 0.79)
 
-        def search_progress(done, total, _pass=i):
-            pass_frac = (_pass + 0.8 + (done / total) * 0.2) / num_passes
-            boot_state["polling_progress"] = min(pass_frac, 0.99)
+    def search_progress(done, total):
+        boot_state["polling_progress"] = min(0.8 + (done / total) * 0.2, 0.99)
 
-        try:
-            await poll_feeds(on_progress=poll_progress)
-        except Exception as e:
-            log.warning(f"Boot poll error: {e}")
-        try:
-            await search_sweep(on_progress=search_progress)
-        except Exception as e:
-            log.warning(f"Boot search error: {e}")
+    try:
+        await poll_feeds(on_progress=poll_progress)
+    except Exception as e:
+        log.warning(f"Boot poll error: {e}")
+    try:
+        await search_sweep(on_progress=search_progress)
+    except Exception as e:
+        log.warning(f"Boot search error: {e}")
     boot_state["polling_progress"] = 1
 
     # Phase 2: clustering — backfill_48h with per-feed progress
