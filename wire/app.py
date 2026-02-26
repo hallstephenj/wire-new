@@ -52,8 +52,7 @@ async def startup_backfill():
         boot_state["polling_progress"] = 1
         boot_state["clustering_progress"] = 1
         boot_state["rewriting_progress"] = 1
-        # Still run dedup merge on existing clusters
-        mark_boot_complete()  # allow embedding model to load
+        # Still run dedup merge on existing clusters (TF-IDF only during boot)
         try:
             conn = get_conn()
             merged = merge_existing_clusters(conn)
@@ -65,6 +64,7 @@ async def startup_backfill():
                 c.close()
         except Exception as e:
             log.warning(f"Boot merge error: {e}")
+        mark_boot_complete()  # allow embedding model to load (after merge, not before)
         boot_state["phase"] = "ready"
         return
 
@@ -153,8 +153,7 @@ async def startup_backfill():
             log.warning(f"Boot rewrite error: {e}")
     boot_state["rewriting_progress"] = 1
 
-    # Merge duplicate clusters before going live
-    mark_boot_complete()  # allow embedding model to load now
+    # Merge duplicate clusters before going live (TF-IDF only during boot)
     try:
         conn = get_conn()
         merged = merge_existing_clusters(conn)
@@ -164,6 +163,7 @@ async def startup_backfill():
     except Exception as e:
         log.warning(f"Boot merge error: {e}")
 
+    mark_boot_complete()  # allow embedding model to load (after merge, not before)
     boot_state["phase"] = "ready"
     conn = get_conn()
     boot_state["clusters"] = conn.execute("SELECT COUNT(*) as c FROM story_clusters").fetchone()["c"]

@@ -577,6 +577,8 @@ def merge_existing_clusters(conn):
 
     try:
         model = _get_embed_model()
+        if model is None:
+            raise RuntimeError("Embedding model not available yet")
         embeddings = model.encode(headlines2, normalize_embeddings=True, show_progress_bar=False)
         embed_sim = embeddings @ embeddings.T
     except Exception as e:
