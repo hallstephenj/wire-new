@@ -19,6 +19,34 @@ log = logging.getLogger("wire.reference")
 
 BROWSER_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 
+# ── Shared HTTP client for reference site scraping ────────────────────────
+_ref_client: httpx.AsyncClient | None = None
+
+
+def init_ref_http_client():
+    """Create the shared HTTP client for reference checks. Call once at app startup."""
+    global _ref_client
+    _ref_client = httpx.AsyncClient(
+        timeout=20,
+        follow_redirects=True,
+        limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+    )
+
+
+async def close_ref_http_client():
+    """Close the shared HTTP client. Call at app shutdown."""
+    global _ref_client
+    if _ref_client:
+        await _ref_client.aclose()
+        _ref_client = None
+
+
+def _get_ref_client() -> httpx.AsyncClient:
+    """Return the shared reference client."""
+    if _ref_client is not None:
+        return _ref_client
+    return httpx.AsyncClient(timeout=20, follow_redirects=True)
+
 
 # ── Site-specific parsers ─────────────────────────────────────────────
 
@@ -154,22 +182,21 @@ PARSERS = {
 async def fetch_site(url: str, parser_key: str, max_headlines: int = 20) -> list[dict]:
     """Fetch a reference site and parse its headlines."""
     headers = {"User-Agent": BROWSER_UA}
+    client = _get_ref_client()
 
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
-            resp = await client.get(url, headers=headers)
-            resp.raise_for_status()
+        resp = await client.get(url, headers=headers)
+        resp.raise_for_status()
     except Exception as e:
         # For AP News, try RSS fallback
         if parser_key == "apnews":
             log.warning(f"AP News HTML fetch failed ({e}), trying RSS fallback")
             try:
-                async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-                    resp = await client.get(
-                        "https://rsshub.app/apnews/topics/apf-topnews",
-                        headers=headers,
-                    )
-                    resp.raise_for_status()
+                resp = await client.get(
+                    "https://rsshub.app/apnews/topics/apf-topnews",
+                    headers=headers,
+                )
+                resp.raise_for_status()
                 return parse_apnews_rss(resp.text, max_headlines)
             except Exception as e2:
                 log.error(f"AP News RSS fallback also failed: {e2}")
@@ -259,14 +286,14 @@ async def _probe_gnews():
     if _ingest_mod._gnews_blocked:
         return
     try:
-        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
-            resp = await client.head(
-                "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
-                headers={"Accept-Language": "en-US,en;q=0.9"},
-            )
-            if "consent.google" in str(resp.url):
-                _ingest_mod._gnews_blocked = True
-                log.warning("Google News consent wall detected — gap-fill searches disabled")
+        client = _get_ref_client()
+        resp = await client.head(
+            "https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en",
+            headers={"Accept-Language": "en-US,en;q=0.9"},
+        )
+        if "consent.google" in str(resp.url):
+            _ingest_mod._gnews_blocked = True
+            log.warning("Google News consent wall detected — gap-fill searches disabled")
     except Exception:
         pass
 

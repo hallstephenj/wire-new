@@ -523,9 +523,19 @@ def merge_existing_clusters(conn):
     headlines = [r["rewritten_headline"] or "" for r in rows]
 
     # ── Pass 1: TF-IDF only (fast, high-confidence word overlap) ──────────
+    # Reuse the cached vectorizer/matrix when the cluster set hasn't changed,
+    # avoiding a full re-fit on every merge call.
     try:
-        tfidf = TfidfVectorizer(stop_words="english", max_features=5000)
-        matrix = tfidf.fit_transform(headlines)
+        cache = _tfidf_cache
+        cache_ids = set(cache.get("cluster_ids", []))
+        row_ids = [r["id"] for r in rows]
+        if (cache["vectorizer"] is not None
+                and cache_ids == set(row_ids)
+                and cache["matrix"] is not None):
+            matrix = cache["matrix"]
+        else:
+            tfidf = TfidfVectorizer(stop_words="english", max_features=5000)
+            matrix = tfidf.fit_transform(headlines)
         sim_matrix = (matrix * matrix.T).toarray()
     except Exception as e:
         log.warning(f"Merge TF-IDF error: {e}")

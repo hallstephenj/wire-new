@@ -197,12 +197,22 @@ def _fetch_clusters_for_rewrite(conn, now, limit):
     if not rows:
         return []
 
+    # Batch-fetch all raw items for these clusters in one query (avoids N+1)
+    cluster_ids = [r["id"] for r in rows]
+    ph = ",".join("?" for _ in cluster_ids)
+    all_items = conn.execute(
+        f"SELECT cluster_id, original_headline, source_name FROM raw_items WHERE cluster_id IN ({ph}) ORDER BY published_at ASC",
+        cluster_ids
+    ).fetchall()
+
+    # Group items by cluster_id
+    items_by_cluster: dict[str, list] = {}
+    for item in all_items:
+        items_by_cluster.setdefault(item["cluster_id"], []).append(item)
+
     clusters = []
     for r in rows:
-        items = conn.execute(
-            "SELECT original_headline, source_name FROM raw_items WHERE cluster_id=? ORDER BY published_at ASC",
-            (r["id"],)
-        ).fetchall()
+        items = items_by_cluster.get(r["id"], [])
         if items:
             clusters.append({
                 "id": r["id"],
@@ -335,12 +345,21 @@ async def urgent_rewrite():
 
     log.info(f"Urgent rewrite: {len(rows)} high-coverage clusters need rewriting")
 
+    # Batch-fetch all raw items in one query (avoids N+1)
+    cluster_ids = [r["id"] for r in rows]
+    ph = ",".join("?" for _ in cluster_ids)
+    all_items = conn.execute(
+        f"SELECT cluster_id, original_headline, source_name FROM raw_items WHERE cluster_id IN ({ph}) ORDER BY published_at ASC",
+        cluster_ids
+    ).fetchall()
+
+    items_by_cluster: dict[str, list] = {}
+    for item in all_items:
+        items_by_cluster.setdefault(item["cluster_id"], []).append(item)
+
     clusters = []
     for r in rows:
-        items = conn.execute(
-            "SELECT original_headline, source_name FROM raw_items WHERE cluster_id=? ORDER BY published_at ASC",
-            (r["id"],)
-        ).fetchall()
+        items = items_by_cluster.get(r["id"], [])
         if items:
             clusters.append({
                 "id": r["id"],

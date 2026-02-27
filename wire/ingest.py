@@ -16,6 +16,42 @@ from wire.rewrite import urgent_rewrite
 
 log = logging.getLogger("wire.ingest")
 
+# ── Shared HTTP client (connection pooling) ───────────────────────────────
+# Initialized once at app startup via init_http_client(), reused for all
+# feed polling, search sweeps, and Google News URL resolution.
+
+_shared_client: httpx.AsyncClient | None = None
+
+
+def init_http_client():
+    """Create the shared HTTP client. Call once at app startup."""
+    global _shared_client
+    _shared_client = httpx.AsyncClient(
+        timeout=15,
+        follow_redirects=True,
+        headers={"User-Agent": "DINWIRE/1.0"},
+        limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+    )
+
+
+async def close_http_client():
+    """Close the shared HTTP client. Call at app shutdown."""
+    global _shared_client
+    if _shared_client:
+        await _shared_client.aclose()
+        _shared_client = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    """Return the shared client, or create a fallback if not initialized."""
+    if _shared_client is not None:
+        return _shared_client
+    # Fallback for testing or direct script usage
+    return httpx.AsyncClient(
+        timeout=15, follow_redirects=True, headers={"User-Agent": "DINWIRE/1.0"}
+    )
+
+
 # Normalize common source name variants to a canonical form
 SOURCE_ALIASES = {
     "The Wall Street Journal": "Wall Street Journal",
@@ -46,13 +82,15 @@ def _normalize_source(name: str) -> str:
 
 # ── Google News URL unwrapping ────────────────────────────────────────────
 # Google News RSS entries have redirect URLs (news.google.com/rss/articles/...).
-# We resolve them to actual article URLs via HEAD requests with a shared cache.
+# We resolve them to actual article URLs via HEAD requests with an LRU cache.
 # If the server is behind a GDPR consent wall (e.g. hosted in EU), resolution
 # will always fail — we detect this once and skip all future attempts.
 
-_gnews_url_cache = {}  # url -> resolved_url
-_GNEWS_CACHE_MAX = 500
 _gnews_blocked = False  # set True after first consent-wall hit
+
+# Bounded cache for resolved Google News URLs
+_gnews_url_cache: dict[str, str] = {}
+_GNEWS_CACHE_MAX = 500
 
 
 def is_gnews_blocked() -> bool:
@@ -89,9 +127,10 @@ async def _unwrap_google_news_url(url: str, client: httpx.AsyncClient) -> str:
         # Only cache if we actually resolved to the real article —
         # reject Google domains (consent walls, redirects back to gnews)
         if "google.com" not in resolved and "google.nl" not in resolved:
+            # Bounded cache: evict oldest half when full
             if len(_gnews_url_cache) >= _GNEWS_CACHE_MAX:
-                # Evict oldest entries (approx)
-                for k in list(_gnews_url_cache.keys())[:100]:
+                keys = list(_gnews_url_cache)[:_GNEWS_CACHE_MAX // 2]
+                for k in keys:
                     del _gnews_url_cache[k]
             _gnews_url_cache[url] = resolved
             return resolved
@@ -162,11 +201,15 @@ GENERAL_SOURCES = {
 
 import time as _time
 
-_filter_cache = {"filters": [], "loaded_at": 0}
+_filter_cache = {"filters": [], "loaded_at": 0, "pattern_hash": None}
 _FILTER_CACHE_TTL = 60  # seconds
 
 def _load_filters():
-    """Load enabled filters from DB with TTL cache."""
+    """Load enabled filters from DB with TTL cache.
+
+    Compiled regexes persist across refreshes — only recompiled when
+    the underlying DB patterns actually change.
+    """
     now = _time.time()
     if _filter_cache["filters"] and (now - _filter_cache["loaded_at"]) < _FILTER_CACHE_TTL:
         return _filter_cache["filters"]
@@ -176,6 +219,13 @@ def _load_filters():
         "SELECT id, name, filter_type, pattern FROM content_filters WHERE enabled = 1"
     ).fetchall()
     conn.close()
+
+    # Check if patterns changed since last compile
+    new_hash = hash(tuple((r["id"], r["pattern"]) for r in rows))
+    if new_hash == _filter_cache["pattern_hash"] and _filter_cache["filters"]:
+        # Patterns unchanged — just refresh the TTL, keep compiled regexes
+        _filter_cache["loaded_at"] = now
+        return _filter_cache["filters"]
 
     filters = []
     for r in rows:
@@ -193,6 +243,7 @@ def _load_filters():
 
     _filter_cache["filters"] = filters
     _filter_cache["loaded_at"] = now
+    _filter_cache["pattern_hash"] = new_hash
     return filters
 
 
@@ -294,75 +345,75 @@ async def poll_feeds(on_progress=None):
             log.warning(f"Urgent rewrite after poll failed: {e}")
 
 async def _poll_single_feed(url: str, name: str, category: str) -> int:
-    async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers={"User-Agent": "DINWIRE/1.0"}) as client:
-        resp = await client.get(url)
-        resp.raise_for_status()
+    client = _get_client()
+    resp = await client.get(url)
+    resp.raise_for_status()
 
-        feed = feedparser.parse(resp.text)
-        conn = get_conn()
-        count = 0
+    feed = feedparser.parse(resp.text)
+    conn = get_conn()
+    count = 0
 
-        for entry in feed.entries[:50]:
-            link = getattr(entry, "link", None)
-            title = getattr(entry, "title", None)
-            if not link or not title:
-                continue
+    for entry in feed.entries[:50]:
+        link = getattr(entry, "link", None)
+        title = getattr(entry, "title", None)
+        if not link or not title:
+            continue
 
-            # Extract real source from Google News entries
-            item_name = name
-            if name == "Google News":
-                # feedparser exposes <source> element; title also ends with " - Source"
-                if hasattr(entry, "source") and hasattr(entry.source, "title"):
-                    item_name = entry.source.title
-                    title = title.rsplit(" - " + item_name, 1)[0] if title.endswith(" - " + item_name) else title
-                elif " - " in title:
-                    title, item_name = title.rsplit(" - ", 1)
+        # Extract real source from Google News entries
+        item_name = name
+        if name == "Google News":
+            # feedparser exposes <source> element; title also ends with " - Source"
+            if hasattr(entry, "source") and hasattr(entry.source, "title"):
+                item_name = entry.source.title
+                title = title.rsplit(" - " + item_name, 1)[0] if title.endswith(" - " + item_name) else title
+            elif " - " in title:
+                title, item_name = title.rsplit(" - ", 1)
 
-            item_name = _normalize_source(item_name)
+        item_name = _normalize_source(item_name)
 
-            # Resolve Google News redirect URLs to actual article URLs
-            if "news.google.com" in link:
-                link = await _unwrap_google_news_url(link, client)
+        # Resolve Google News redirect URLs to actual article URLs
+        if "news.google.com" in link:
+            link = await _unwrap_google_news_url(link, client)
 
-            # Exact URL dedup
-            existing = conn.execute("SELECT id FROM raw_items WHERE source_url=?", (link,)).fetchone()
-            if existing:
-                continue
+        # Exact URL dedup
+        existing = conn.execute("SELECT id FROM raw_items WHERE source_url=?", (link,)).fetchone()
+        if existing:
+            continue
 
-            # Headline + source dedup (catches Google News duplicates with different URLs)
-            existing = conn.execute(
-                "SELECT id FROM raw_items WHERE original_headline=? AND source_name=?",
-                (title, item_name)
-            ).fetchone()
-            if existing:
-                continue
+        # Headline + source dedup (catches Google News duplicates with different URLs)
+        existing = conn.execute(
+            "SELECT id FROM raw_items WHERE original_headline=? AND source_name=?",
+            (title, item_name)
+        ).fetchone()
+        if existing:
+            continue
 
-            # Filter out product reviews, deals, affiliate/sponsored content
-            matched_filter = _check_filters(title)
-            if matched_filter:
-                log.debug(f"Filtered ({matched_filter['name']}): {title}")
-                now_f = datetime.now(timezone.utc).isoformat()
-                conn.execute(
-                    "INSERT INTO filtered_items (headline, source_name, source_url, feed_url, category, filter_id, filter_name, filter_pattern, filtered_at) VALUES (?,?,?,?,?,?,?,?,?)",
-                    (title, item_name, link, url, category, matched_filter["id"], matched_filter["name"], matched_filter["pattern"], now_f)
-                )
-                continue
-
-            item_id = str(uuid.uuid4())
-            published = parse_published(entry)
-            now = datetime.now(timezone.utc).isoformat()
-
-            cluster_id = assign_cluster(conn, title, link, item_name, category, published_at=published)
-
+        # Filter out product reviews, deals, affiliate/sponsored content
+        matched_filter = _check_filters(title)
+        if matched_filter:
+            log.debug(f"Filtered ({matched_filter['name']}): {title}")
+            now_f = datetime.now(timezone.utc).isoformat()
             conn.execute(
-                "INSERT INTO raw_items (id, source_url, source_name, original_headline, published_at, ingested_at, feed_url, category, cluster_id) VALUES (?,?,?,?,?,?,?,?,?)",
-                (item_id, link, item_name, title, published, now, url, category, cluster_id)
+                "INSERT INTO filtered_items (headline, source_name, source_url, feed_url, category, filter_id, filter_name, filter_pattern, filtered_at) VALUES (?,?,?,?,?,?,?,?,?)",
+                (title, item_name, link, url, category, matched_filter["id"], matched_filter["name"], matched_filter["pattern"], now_f)
             )
-            count += 1
+            continue
 
-        conn.commit()
-        conn.close()
-        return count
+        item_id = str(uuid.uuid4())
+        published = parse_published(entry)
+        now = datetime.now(timezone.utc).isoformat()
+
+        cluster_id = assign_cluster(conn, title, link, item_name, category, published_at=published)
+
+        conn.execute(
+            "INSERT INTO raw_items (id, source_url, source_name, original_headline, published_at, ingested_at, feed_url, category, cluster_id) VALUES (?,?,?,?,?,?,?,?,?)",
+            (item_id, link, item_name, title, published, now, url, category, cluster_id)
+        )
+        count += 1
+
+    conn.commit()
+    conn.close()
+    return count
 
 async def search_sweep(on_progress=None):
     cfg = load_config()

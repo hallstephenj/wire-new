@@ -730,6 +730,7 @@ document.querySelectorAll('#sort-tabs .tab').forEach(btn => {
         currentSort = btn.dataset.sort;
         currentOffset = 0;
         knownIds.clear();
+        _lastStoryData.clear();
         fetchStories();
     });
 });
@@ -741,6 +742,7 @@ document.querySelectorAll('#cat-tabs .tab').forEach(btn => {
         currentCat = btn.dataset.cat;
         currentOffset = 0;
         knownIds.clear();
+        _lastStoryData.clear();
         fetchStories();
     });
 });
@@ -867,6 +869,71 @@ function toggleItems(id) {
 
 /* ── Fetch & pagination ───────────────────────────────────────────── */
 let _refreshTimer = null;
+let _lastStoryData = new Map(); // id -> story JSON for diffing
+
+function _storyChanged(oldS, newS) {
+    return oldS.headline !== newS.headline
+        || oldS.source_count !== newS.source_count
+        || oldS.market_mover !== newS.market_mover
+        || (oldS.other_sources || []).length !== (newS.other_sources || []).length;
+}
+
+function _applyDiff(container, stories) {
+    const newIds = stories.map(s => s.id);
+    const newIdSet = new Set(newIds);
+    const oldNodes = container.querySelectorAll('.story[data-id]');
+    const oldIdList = Array.from(oldNodes).map(n => n.dataset.id);
+    const oldIdSet = new Set(oldIdList);
+
+    // If order or set changed significantly, do a targeted rebuild
+    const orderMatch = newIds.length === oldIdList.length
+        && newIds.every((id, i) => id === oldIdList[i]);
+
+    if (!orderMatch) {
+        // Order changed or different stories — full rebuild but reuse unchanged nodes
+        const existingNodes = new Map();
+        oldNodes.forEach(n => existingNodes.set(n.dataset.id, n));
+
+        // Also collect ad slots to reinsert
+        const frag = document.createDocumentFragment();
+        stories.forEach((s, i) => {
+            if ((currentOffset + i) > 0 && (currentOffset + i) % AD_INTERVAL === 0) {
+                const ad = document.createElement('div');
+                ad.className = 'ad-slot';
+                ad.innerHTML = '<!-- ad -->';
+                frag.appendChild(ad);
+            }
+            const old = existingNodes.get(s.id);
+            if (old && !_storyChanged(_lastStoryData.get(s.id) || {}, s)) {
+                frag.appendChild(old);
+            } else {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = renderStory(s);
+                frag.appendChild(wrapper.firstElementChild);
+            }
+        });
+        container.innerHTML = '';
+        container.appendChild(frag);
+    } else {
+        // Same order — only update changed stories in place
+        stories.forEach((s, i) => {
+            const oldData = _lastStoryData.get(s.id);
+            if (oldData && !_storyChanged(oldData, s)) return;
+            const node = oldNodes[i];
+            if (node) {
+                const wrapper = document.createElement('div');
+                wrapper.innerHTML = renderStory(s);
+                const newNode = wrapper.firstElementChild;
+                newNode.style.animation = 'none'; // skip fadeIn for updates
+                node.replaceWith(newNode);
+            }
+        });
+    }
+
+    // Update cache
+    _lastStoryData.clear();
+    stories.forEach(s => _lastStoryData.set(s.id, s));
+}
 
 async function fetchStories(append) {
     try {
@@ -877,18 +944,34 @@ async function fetchStories(append) {
 
         const container = document.getElementById('stories');
 
-        let html = '';
-        data.stories.forEach((s, i) => {
-            if ((currentOffset + i) > 0 && (currentOffset + i) % AD_INTERVAL === 0) {
-                html += `<div class="ad-slot"><!-- ad --></div>`;
-            }
-            html += renderStory(s);
-        });
-
         if (append) {
+            let html = '';
+            data.stories.forEach((s, i) => {
+                if ((currentOffset + i) > 0 && (currentOffset + i) % AD_INTERVAL === 0) {
+                    html += `<div class="ad-slot"><!-- ad --></div>`;
+                }
+                html += renderStory(s);
+            });
             container.insertAdjacentHTML('beforeend', html);
+            data.stories.forEach(s => _lastStoryData.set(s.id, s));
+        } else if (!data.stories.length) {
+            container.innerHTML = '<div class="loading">No stories yet. Feeds are still loading — this page will refresh automatically.</div>';
+            _lastStoryData.clear();
+        } else if (_lastStoryData.size > 0 && currentOffset === 0) {
+            // Differential update — avoid full DOM rebuild on refresh
+            _applyDiff(container, data.stories);
         } else {
-            container.innerHTML = html || '<div class="loading">No stories yet. Feeds are still loading — this page will refresh automatically.</div>';
+            // First load or offset change — full render
+            let html = '';
+            data.stories.forEach((s, i) => {
+                if ((currentOffset + i) > 0 && (currentOffset + i) % AD_INTERVAL === 0) {
+                    html += `<div class="ad-slot"><!-- ad --></div>`;
+                }
+                html += renderStory(s);
+            });
+            container.innerHTML = html;
+            _lastStoryData.clear();
+            data.stories.forEach(s => _lastStoryData.set(s.id, s));
         }
 
         const newIds = new Set(data.stories.map(s => s.id));

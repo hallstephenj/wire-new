@@ -12,12 +12,12 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from wire.db import init_db, get_conn
 from wire.config import load_config, set_override, get_overrides
-from wire.ingest import poll_feeds, search_sweep, backfill_48h, invalidate_filter_cache
+from wire.ingest import poll_feeds, search_sweep, backfill_48h, invalidate_filter_cache, init_http_client, close_http_client
 from wire.rewrite import rewrite_pending, rewrite_boot
 from wire.cluster import assign_cluster, merge_existing_clusters, mark_boot_complete
 from wire.events import snapshot as events_snapshot
 from wire.scores import all_scores, get_score
-from wire.reference import run_reference_check
+from wire.reference import run_reference_check, init_ref_http_client, close_ref_http_client
 from wire.algorithm import get_active_version, build_source_quality_case, build_reputable_sources_sql, build_hot_score_sql, build_market_mover_case_sql, list_versions, set_active_version
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -192,6 +192,10 @@ async def lifespan(app: FastAPI):
     global _boot_task
     init_db()
 
+    # Initialize shared HTTP connection pools
+    init_http_client()
+    init_ref_http_client()
+
     # Boot backfill in background, scheduler deferred until boot completes
     _boot_task = asyncio.create_task(startup_backfill())
     asyncio.create_task(_start_scheduler_after_boot())
@@ -199,6 +203,8 @@ async def lifespan(app: FastAPI):
     log.info("EDROWIRE started")
     yield
     scheduler.shutdown(wait=False)
+    await close_http_client()
+    await close_ref_http_client()
 
 app = FastAPI(lifespan=lifespan)
 
