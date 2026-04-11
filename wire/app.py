@@ -765,15 +765,20 @@ async def user_feeds(request: Request, user=Depends(require_user)):
 async def toggle_feed(feed_id: int, request: Request, user=Depends(require_user)):
     body = await request.json()
     enabled = 1 if body.get("enabled") else 0
-    conn = get_conn()
+    user_id = user["id"]
     now = datetime.now(timezone.utc).isoformat()
-    conn.execute("""
-        INSERT INTO user_feed_subscriptions (user_id, feed_source_id, enabled, created_at)
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(user_id, feed_source_id) DO UPDATE SET enabled = excluded.enabled
-    """, (user["id"], feed_id, enabled, now))
-    conn.commit()
-    conn.close()
+
+    def _write():
+        conn = get_conn()
+        conn.execute("""
+            INSERT INTO user_feed_subscriptions (user_id, feed_source_id, enabled, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id, feed_source_id) DO UPDATE SET enabled = excluded.enabled
+        """, (user_id, feed_id, enabled, now))
+        conn.commit()
+        conn.close()
+
+    await asyncio.to_thread(_write)
     return {"ok": True}
 
 

@@ -320,7 +320,7 @@ async def poll_feeds(on_progress=None):
     total = len(all_feeds)
     completed = 0
     count = 0
-    sem = asyncio.Semaphore(8)
+    sem = asyncio.Semaphore(3)
 
     async def _poll_one(category, feed):
         nonlocal completed, count
@@ -566,7 +566,7 @@ async def backfill_48h(on_progress=None):
     for category, feed in db_feeds:
         ops.append((feed["url"], feed["name"], category))
 
-    sem = asyncio.Semaphore(8)
+    sem = asyncio.Semaphore(3)
     total_ops = len(ops)
     _progress_batch = max(1, total_ops // 20)  # update progress ~20 times
 
