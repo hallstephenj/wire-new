@@ -110,8 +110,6 @@ input[type="text"]:focus { border-color: #ffb000; }
         <label>Email</label>
         <div class="static-value" id="user-email">—</div>
     </div>
-    <button class="btn" onclick="saveProfile()">SAVE</button>
-
     <!-- Feeds -->
     <h2>Feeds</h2>
     <div style="display:flex;gap:8px;margin-bottom:10px;">
@@ -149,7 +147,6 @@ input[type="text"]:focus { border-color: #ffb000; }
     <h2>Categories</h2>
     <div style="font-size:11px;color:#444;margin-bottom:12px;">Click a category to hide or show its tab.</div>
     <div class="cat-list" id="cat-list"></div>
-    <button class="btn" onclick="saveCategories()">SAVE</button>
 
     <!-- Pro-gated: Reorder categories -->
     <div class="pro-section" style="margin-top:12px;">
@@ -237,6 +234,11 @@ input[type="text"]:focus { border-color: #ffb000; }
             </div>
             <span class="unlock-hint">Unlock →</span>
         </div>
+    </div>
+
+    <!-- Save all -->
+    <div style="margin-top:32px;padding-top:24px;border-top:1px solid #151515;">
+        <button class="btn" id="save-all-btn" onclick="saveAll()" style="padding:12px 32px;font-size:12px;">SAVE CHANGES</button>
     </div>
 
     <!-- Plan -->
@@ -380,25 +382,25 @@ function renderCategories() {
     }
 }
 
-async function saveCategories() {
-    await fetch('/api/user/preferences', {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hidden_categories: JSON.stringify(hiddenCats) }),
-    });
-    showToast('SAVED');
-}
-
 function updateWirePreview() {
     const prefix = document.getElementById('wire-name').value.trim().toUpperCase() || 'EDRO';
     document.getElementById('wire-preview').textContent = prefix + 'WIRE';
 }
 
-async function saveProfile() {
+async function saveAll() {
+    const btn = document.getElementById('save-all-btn');
+    btn.disabled = true;
+    btn.textContent = 'SAVING...';
     const prefix = document.getElementById('wire-name').value.trim().toUpperCase();
     await fetch('/api/user/preferences', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wire_name: prefix }),
+        body: JSON.stringify({
+            wire_name: prefix,
+            hidden_categories: JSON.stringify(hiddenCats),
+        }),
     });
+    btn.disabled = false;
+    btn.textContent = 'SAVE CHANGES';
     showToast('SAVED');
 }
 
