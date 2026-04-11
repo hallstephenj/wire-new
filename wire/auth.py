@@ -1,5 +1,6 @@
 import os
 import time
+import hashlib
 import logging
 import asyncio
 import httpx
@@ -8,6 +9,22 @@ from fastapi import Request, HTTPException
 from wire.db import get_conn
 
 log = logging.getLogger("wire.auth")
+
+# Cache verified user dicts by token fingerprint — avoids re-running expensive
+# ES256 crypto + DB lookup on every request when many hit simultaneously.
+_user_cache: dict[str, tuple[dict, float]] = {}
+_USER_CACHE_TTL = 60  # seconds
+
+
+def _token_key(token: str) -> str:
+    return hashlib.sha256(token.encode()).hexdigest()[:24]
+
+
+def _evict_expired_cache():
+    now = time.time()
+    expired = [k for k, (_, exp) in _user_cache.items() if now >= exp]
+    for k in expired:
+        del _user_cache[k]
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 _JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
@@ -88,6 +105,15 @@ async def get_current_user(request: Request):
     token = _get_token(request)
     if not token:
         return None
+
+    # Fast path: return cached user if still valid
+    key = _token_key(token)
+    cached = _user_cache.get(key)
+    if cached:
+        user, exp = cached
+        if time.time() < exp:
+            return user
+
     try:
         t0 = time.perf_counter()
         payload = await _verify_token(token)
@@ -109,10 +135,17 @@ async def get_current_user(request: Request):
         if db_ms > 200:
             log.warning(f"Slow auth DB lookup: {db_ms:.0f}ms")
 
-        if not profile:
-            return {"id": user_id, "is_admin": 0, "subscription_status": "free",
-                    "onboarding_completed": 0, "email": payload.get("email")}
-        return dict(profile)
+        user = dict(profile) if profile else {
+            "id": user_id, "is_admin": 0, "subscription_status": "free",
+            "onboarding_completed": 0, "email": payload.get("email")
+        }
+
+        # Cache result; evict stale entries occasionally
+        _user_cache[key] = (user, time.time() + _USER_CACHE_TTL)
+        if len(_user_cache) % 50 == 0:
+            _evict_expired_cache()
+
+        return user
     except Exception:
         return None
 
