@@ -6,7 +6,7 @@ database:
   path: "data/edrowire.db"
 
 polling:
-  rss_interval_minutes: 5
+  rss_interval_minutes: 15
   search_interval_minutes: 60
   cleanup_interval_hours: 6
 
