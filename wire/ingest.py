@@ -329,7 +329,7 @@ async def poll_feeds(on_progress=None):
                 n = await _poll_single_feed(feed["url"], feed["name"], category)
                 count += n
             except Exception as e:
-                log.warning(f"Feed error {feed['name']}: {str(e).splitlines()[0]}")
+                log.warning(f"Feed error {feed['name']}: {str(e).splitlines()[0] if str(e).strip() else type(e).__name__}")
             completed += 1
             if on_progress:
                 on_progress(completed, total)
@@ -450,7 +450,7 @@ async def search_sweep(on_progress=None):
                 n = await _poll_single_feed(url, "Google News", cat)
                 count += n
             except Exception as e:
-                log.warning(f"Search sweep error for '{query}': {str(e).splitlines()[0]}")
+                log.warning(f"Search sweep error for '{query}': {str(e).splitlines()[0] if str(e).strip() else type(e).__name__}")
             if on_progress:
                 on_progress(idx + 1, len(queries))
     ev("ingest_done", job="search", items=count)
