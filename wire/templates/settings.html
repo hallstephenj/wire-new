@@ -51,25 +51,35 @@ input[type="text"]:focus { border-color: #ffb000; }
 
 /* Pro gate — locked sections */
 .pro-section {
-    border: 1px solid #1a1a1a; background: #0a0a0a; margin-bottom: 8px;
-    position: relative; overflow: hidden;
+    border: 1px solid #1e1e1e;
+    border-left: 2px solid #2a1f00;
+    background: #0c0c0c;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    cursor: pointer;
+    transition: border-left-color 0.15s, background 0.15s;
 }
-.pro-section-inner {
-    padding: 14px 16px; opacity: 0.35; pointer-events: none; filter: blur(0.3px);
-    user-select: none;
+.pro-section:hover {
+    border-left-color: #ffb000;
+    background: #0e0e0e;
 }
-.pro-section-overlay {
-    position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 16px; cursor: pointer;
-    transition: background 0.15s;
+.pro-section-left { display: flex; flex-direction: column; gap: 4px; }
+.pro-section-name { font-size: 11px; color: #555; letter-spacing: 1px; text-transform: uppercase; }
+.pro-section-desc { font-size: 10px; color: #333; }
+.pro-section-right { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.pro-badge {
+    font-size: 9px; color: #554400; border: 1px solid #2a1f00;
+    padding: 2px 7px; letter-spacing: 2px; text-transform: uppercase;
+    background: rgba(255,176,0,0.03);
 }
-.pro-section-overlay:hover { background: rgba(255,176,0,0.03); }
-.pro-lock { display: flex; align-items: center; gap: 10px; }
-.lock-icon { font-size: 14px; color: #333; }
-.pro-section-label { font-size: 11px; color: #444; }
+.pro-section:hover .pro-badge { color: #ffb000; border-color: #554400; }
+.pro-upgrade-link { font-size: 10px; color: #333; letter-spacing: 1px; white-space: nowrap; }
+.pro-section:hover .pro-upgrade-link { color: #ffb000; }
 .pro-pill { font-size: 9px; color: #ffb000; border: 1px solid #332200; padding: 2px 7px; letter-spacing: 1px; background: rgba(255,176,0,0.05); }
-.unlock-hint { font-size: 10px; color: #333; }
-.pro-section-overlay:hover .unlock-hint { color: #ffb000; }
 
 /* Billing upsell card */
 .upgrade-card { border: 1px solid #2a1f00; background: rgba(255,176,0,0.02); padding: 20px; margin-bottom: 20px; }
@@ -119,21 +129,14 @@ input[type="text"]:focus { border-color: #ffb000; }
     <div class="feed-list" id="feed-list"></div>
 
     <!-- Custom feed — Pro gate -->
-    <div class="pro-section" id="custom-feed-section">
-        <div class="pro-section-inner">
-            <div style="font-size:11px;color:#555;margin-bottom:6px;">Add any RSS feed URL</div>
-            <div style="display:flex;gap:8px;">
-                <input type="text" placeholder="https://example.com/feed.rss" style="flex:1;" disabled>
-                <button class="btn" disabled>ADD</button>
-            </div>
+    <div class="pro-section" id="custom-feed-section" onclick="scrollToBilling()">
+        <div class="pro-section-left">
+            <div class="pro-section-name">Custom RSS Feeds</div>
+            <div class="pro-section-desc">Add any feed from any source — unlimited</div>
         </div>
-        <div class="pro-section-overlay" onclick="scrollToBilling()">
-            <div class="pro-lock">
-                <span class="lock-icon">🔒</span>
-                <span class="pro-section-label">Custom RSS Feeds</span>
-                <span class="pro-pill">PRO</span>
-            </div>
-            <span class="unlock-hint">Unlock →</span>
+        <div class="pro-section-right">
+            <span class="pro-badge">PRO</span>
+            <span class="pro-upgrade-link">UPGRADE →</span>
         </div>
     </div>
 
@@ -149,90 +152,53 @@ input[type="text"]:focus { border-color: #ffb000; }
     <div class="cat-list" id="cat-list"></div>
 
     <!-- Pro-gated: Reorder categories -->
-    <div class="pro-section" style="margin-top:12px;">
-        <div class="pro-section-inner">
-            <div style="font-size:10px;color:#555;margin-bottom:8px;letter-spacing:1px;text-transform:uppercase;">Reorder Tabs</div>
-            <div style="display:flex;gap:6px;">
-                <span style="border:1px solid #2a2a2a;padding:4px 10px;font-size:10px;color:#444;">TECH</span>
-                <span style="border:1px solid #2a2a2a;padding:4px 10px;font-size:10px;color:#444;">MARKETS</span>
-                <span style="border:1px solid #2a2a2a;padding:4px 10px;font-size:10px;color:#444;">POLITICS</span>
-            </div>
+    <div class="pro-section" style="margin-top:10px;" onclick="scrollToBilling()">
+        <div class="pro-section-left">
+            <div class="pro-section-name">Reorder Category Tabs</div>
+            <div class="pro-section-desc">Drag tabs into your preferred order</div>
         </div>
-        <div class="pro-section-overlay" onclick="scrollToBilling()">
-            <div class="pro-lock">
-                <span class="lock-icon">🔒</span>
-                <span class="pro-section-label">Reorder Category Tabs</span>
-                <span class="pro-pill">PRO</span>
-            </div>
-            <span class="unlock-hint">Unlock →</span>
+        <div class="pro-section-right">
+            <span class="pro-badge">PRO</span>
+            <span class="pro-upgrade-link">UPGRADE →</span>
         </div>
     </div>
 
     <!-- Pro-gated: Custom search queries -->
-    <h2>Search Queries <span class="pro-pill" style="font-size:9px;">PRO</span></h2>
-    <div class="pro-section">
-        <div class="pro-section-inner">
-            <div style="font-size:11px;color:#555;margin-bottom:8px;">Add your own search terms — Wire will hunt for matching stories every hour.</div>
-            <div style="display:flex;gap:8px;margin-bottom:8px;">
-                <input type="text" placeholder='"NVDA earnings"' style="flex:1;" disabled>
-                <button class="btn" disabled>ADD</button>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:4px;">
-                <div style="font-size:11px;color:#3a3a3a;padding:4px 0;border-bottom:1px solid #111;">"NVDA earnings"</div>
-                <div style="font-size:11px;color:#3a3a3a;padding:4px 0;border-bottom:1px solid #111;">"Fed rate decision"</div>
-            </div>
+    <h2>Search Queries</h2>
+    <div class="pro-section" onclick="scrollToBilling()">
+        <div class="pro-section-left">
+            <div class="pro-section-name">Custom Search Queries</div>
+            <div class="pro-section-desc">Hunt for any topic — wire sweeps every hour</div>
         </div>
-        <div class="pro-section-overlay" onclick="scrollToBilling()">
-            <div class="pro-lock">
-                <span class="lock-icon">🔒</span>
-                <span class="pro-section-label">Custom Search Queries</span>
-                <span class="pro-pill">PRO</span>
-            </div>
-            <span class="unlock-hint">Unlock →</span>
+        <div class="pro-section-right">
+            <span class="pro-badge">PRO</span>
+            <span class="pro-upgrade-link">UPGRADE →</span>
         </div>
     </div>
 
     <!-- Pro-gated: Story curation -->
-    <h2>Story Curation <span class="pro-pill" style="font-size:9px;">PRO</span></h2>
-    <div class="pro-section">
-        <div class="pro-section-inner">
-            <div style="font-size:11px;color:#555;margin-bottom:8px;">Pin stories to the top of your feed, or permanently hide ones you never want to see.</div>
-            <div style="display:flex;gap:8px;margin-bottom:6px;">
-                <div style="flex:1;background:#0f0f0f;border:1px solid #1a1a1a;padding:8px 10px;">
-                    <div style="font-size:11px;color:#444;">Fed holds rates steady amid inflation data</div>
-                    <div style="display:flex;gap:8px;margin-top:6px;">
-                        <span style="font-size:9px;color:#333;border:1px solid #1a1a1a;padding:2px 6px;">📌 PIN</span>
-                        <span style="font-size:9px;color:#333;border:1px solid #1a1a1a;padding:2px 6px;">✕ HIDE</span>
-                    </div>
-                </div>
-            </div>
+    <h2>Story Curation</h2>
+    <div class="pro-section" onclick="scrollToBilling()">
+        <div class="pro-section-left">
+            <div class="pro-section-name">Pin &amp; Hide Stories</div>
+            <div class="pro-section-desc">Permanently surface or suppress individual stories</div>
         </div>
-        <div class="pro-section-overlay" onclick="scrollToBilling()">
-            <div class="pro-lock">
-                <span class="lock-icon">🔒</span>
-                <span class="pro-section-label">Pin &amp; Hide Stories</span>
-                <span class="pro-pill">PRO</span>
-            </div>
-            <span class="unlock-hint">Unlock →</span>
+        <div class="pro-section-right">
+            <span class="pro-badge">PRO</span>
+            <span class="pro-upgrade-link">UPGRADE →</span>
         </div>
     </div>
 
     <!-- Pro-gated: API Access -->
-    <h2>API Access <span class="pro-pill" style="font-size:9px;">PRO</span></h2>
-    <div class="pro-section">
-        <div class="pro-section-inner">
-            <div style="font-size:11px;color:#555;margin-bottom:8px;">Pull your personalized wire into any app or script.</div>
-            <div style="background:#0f0f0f;border:1px solid #1a1a1a;padding:10px 12px;font-size:11px;color:#333;">
-                GET /api/stories?token=••••••••••••••••
-            </div>
+    <h2>API Access</h2>
+    <div class="pro-section" onclick="scrollToBilling()">
+        <div class="pro-section-left">
+            <div class="pro-section-name">API Access</div>
+            <div class="pro-section-desc">Pull your wire into any app, script, or dashboard</div>
         </div>
-        <div class="pro-section-overlay" onclick="scrollToBilling()">
-            <div class="pro-lock">
-                <span class="lock-icon">🔒</span>
-                <span class="pro-section-label">API Access</span>
-                <span class="pro-pill">PRO</span>
-            </div>
-            <span class="unlock-hint">Unlock →</span>
+        <div class="pro-section-right">
+            <span class="pro-badge">PRO</span>
+            <span class="pro-upgrade-link">UPGRADE →</span>
         </div>
     </div>
 
@@ -283,18 +249,15 @@ async function init() {
 
     // Unlock Pro sections if Pro
     if (isPro) {
-        // Custom feed
         document.getElementById('custom-feed-section').style.display = 'none';
-        const row = document.getElementById('custom-feed-row');
-        row.style.display = 'flex';
-
-        // Hide all pro-section overlays so controls are usable
-        document.querySelectorAll('.pro-section-overlay').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('.pro-section-inner').forEach(el => {
-            el.style.opacity = '1';
-            el.style.pointerEvents = 'auto';
-            el.style.filter = 'none';
+        document.getElementById('custom-feed-row').style.display = 'flex';
+        // Remove click-to-upgrade from all pro sections
+        document.querySelectorAll('.pro-section').forEach(el => {
+            el.style.cursor = 'default';
+            el.style.borderLeftColor = '#ffb000';
+            el.onclick = null;
         });
+        document.querySelectorAll('.pro-upgrade-link').forEach(el => el.style.display = 'none');
     }
 
     if (new URLSearchParams(location.search).get('upgraded') === '1') {
