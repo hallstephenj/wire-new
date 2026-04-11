@@ -9,153 +9,147 @@
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-    background: #0a0a0a;
-    color: #cccccc;
+    background: #0a0a0a; color: #cccccc;
     font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-    font-size: 13px;
-    min-height: 100vh;
+    font-size: 13px; min-height: 100vh;
 }
-#app {
-    max-width: 600px;
-    margin: 0 auto;
-    padding: 40px 24px;
-}
+#app { max-width: 620px; margin: 0 auto; padding: 40px 24px 80px; }
 .logo { font-size: 20px; font-weight: 700; color: #ffb000; letter-spacing: 4px; margin-bottom: 40px; }
 .step { display: none; }
 .step.active { display: block; }
-.step-indicator {
-    font-size: 10px;
-    color: #444;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-bottom: 8px;
-}
-h1 { font-size: 16px; font-weight: 700; color: #ccc; letter-spacing: 1px; margin-bottom: 6px; }
-.subtitle { font-size: 11px; color: #555; margin-bottom: 28px; }
 
-/* Preset cards */
-.presets {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 28px;
-}
+/* Progress bar */
+.progress-bar { display: flex; gap: 6px; margin-bottom: 32px; }
+.progress-seg { height: 2px; flex: 1; background: #222; transition: background 0.3s; }
+.progress-seg.done { background: #ffb000; }
+.progress-seg.active { background: rgba(255,176,0,0.4); }
+
+.step-label { font-size: 10px; color: #444; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 8px; }
+h1 { font-size: 18px; font-weight: 700; color: #ccc; letter-spacing: 1px; margin-bottom: 6px; }
+.subtitle { font-size: 11px; color: #555; margin-bottom: 28px; line-height: 1.6; }
+
+/* Preset cards — step 1 */
+.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 28px; }
 .preset-card {
-    border: 1px solid #2a2a2a;
-    padding: 16px;
-    cursor: pointer;
-    transition: all 0.15s;
-    background: #111;
+    border: 1px solid #222; padding: 18px 16px; cursor: pointer;
+    transition: all 0.15s; background: #0f0f0f; position: relative;
 }
-.preset-card:hover { border-color: #555; }
-.preset-card.selected { border-color: #ffb000; background: rgba(255,176,0,0.05); }
-.preset-card .preset-name { font-size: 13px; font-weight: 700; color: #ccc; margin-bottom: 4px; }
-.preset-card .preset-desc { font-size: 10px; color: #555; }
+.preset-card:hover { border-color: #444; background: #131313; }
+.preset-card.selected { border-color: #ffb000; background: rgba(255,176,0,0.04); }
+.preset-icon { font-size: 20px; margin-bottom: 8px; }
+.preset-name { font-size: 13px; font-weight: 700; color: #bbb; margin-bottom: 4px; letter-spacing: 1px; }
 .preset-card.selected .preset-name { color: #ffb000; }
-.preset-all { grid-column: 1 / -1; }
+.preset-desc { font-size: 10px; color: #555; line-height: 1.5; }
+.preset-sources { font-size: 9px; color: #444; margin-top: 6px; letter-spacing: 0.5px; }
+.preset-card.selected .preset-sources { color: #664400; }
+.preset-all { grid-column: 1 / -1; display: flex; align-items: center; gap: 16px; }
+.preset-all .preset-icon { font-size: 24px; margin-bottom: 0; }
+.preset-check {
+    position: absolute; top: 10px; right: 10px;
+    width: 18px; height: 18px; border: 1px solid #333; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 10px; color: transparent;
+    transition: all 0.15s;
+}
+.preset-card.selected .preset-check { background: #ffb000; border-color: #ffb000; color: #0a0a0a; }
 
-/* Feed list */
-.feed-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; margin-bottom: 24px; }
-.feed-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 12px;
-    background: #111;
-    border: 1px solid #222;
-}
-.feed-item-info { flex: 1; }
-.feed-item-name { font-size: 12px; color: #ccc; }
-.feed-item-cat { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
-.toggle {
-    width: 36px; height: 20px;
-    background: #222;
-    border: 1px solid #333;
-    border-radius: 10px;
-    position: relative;
-    cursor: pointer;
-    transition: background 0.2s;
-    flex-shrink: 0;
-}
-.toggle.on { background: #ffb000; border-color: #ffb000; }
-.toggle::after {
-    content: '';
-    position: absolute;
-    top: 2px; left: 2px;
-    width: 14px; height: 14px;
-    background: #555;
-    border-radius: 50%;
-    transition: left 0.2s, background 0.2s;
-}
-.toggle.on::after { left: 18px; background: #0a0a0a; }
-
-/* Wire name */
-.wire-name-input {
-    width: 100%;
-    background: #111;
-    border: 1px solid #333;
-    color: #ffb000;
-    font-family: inherit;
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: 3px;
-    padding: 12px 16px;
-    outline: none;
-    text-transform: uppercase;
-    margin-bottom: 24px;
+/* Bundle cards — step 2 */
+.bundles { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+.bundle-card {
+    border: 1px solid #1e1e1e; background: #0f0f0f; padding: 14px 16px;
+    display: flex; align-items: center; gap: 14px; cursor: pointer;
     transition: border-color 0.15s;
 }
-.wire-name-input:focus { border-color: #ffb000; }
+.bundle-card:hover { border-color: #333; }
+.bundle-card.on { border-color: #333; }
+.bundle-icon { font-size: 18px; flex-shrink: 0; width: 28px; text-align: center; }
+.bundle-info { flex: 1; }
+.bundle-name { font-size: 12px; font-weight: 700; color: #bbb; letter-spacing: 1px; margin-bottom: 3px; }
+.bundle-detail { font-size: 10px; color: #555; line-height: 1.4; }
+.bundle-count { font-size: 10px; color: #444; margin-top: 2px; }
+.bundle-toggle {
+    width: 40px; height: 22px; background: #1a1a1a; border: 1px solid #2a2a2a;
+    border-radius: 11px; position: relative; flex-shrink: 0; transition: background 0.2s;
+}
+.bundle-toggle.on { background: #ffb000; border-color: #ffb000; }
+.bundle-toggle::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 14px; height: 14px; background: #444; border-radius: 50%; transition: left 0.2s, background 0.2s;
+}
+.bundle-toggle.on::after { left: 21px; background: #0a0a0a; }
 
-/* Step 4 */
-.live-count { font-size: 36px; font-weight: 700; color: #ffb000; margin: 24px 0 8px; }
-.pro-callout {
-    border: 1px solid #333;
-    padding: 16px;
-    margin: 24px 0;
-    background: #111;
+/* Wire name — step 3 */
+.wire-preview { font-size: 28px; font-weight: 700; color: #ffb000; letter-spacing: 4px; margin: 16px 0 8px; min-height: 40px; }
+.wire-input-row { display: flex; align-items: center; gap: 0; margin-bottom: 24px; }
+.wire-input-row input {
+    background: #111; border: 1px solid #333; color: #ffb000;
+    font-family: inherit; font-size: 18px; font-weight: 700; letter-spacing: 3px;
+    padding: 12px 16px; outline: none; text-transform: uppercase; width: 200px;
+    transition: border-color 0.15s;
 }
-.pro-callout .pro-badge {
-    font-size: 10px;
-    color: #ffb000;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    margin-bottom: 8px;
+.wire-input-row input:focus { border-color: #ffb000; }
+.wire-suffix {
+    background: #1a1a1a; border: 1px solid #333; border-left: none;
+    padding: 12px 16px; color: #ffb000; font-weight: 700; font-size: 18px;
+    letter-spacing: 3px;
 }
-.pro-callout p { font-size: 11px; color: #666; line-height: 1.6; }
+
+/* Step 4 — pro upsell */
+.live-count { font-size: 42px; font-weight: 700; color: #ffb000; margin: 20px 0 4px; }
+.live-label { font-size: 11px; color: #555; margin-bottom: 28px; }
+
+.comparison {
+    border: 1px solid #222; margin-bottom: 24px;
+}
+.comparison-header {
+    display: grid; grid-template-columns: 1fr 100px 100px;
+    padding: 10px 14px; border-bottom: 1px solid #222; background: #0f0f0f;
+}
+.comparison-header span { font-size: 10px; letter-spacing: 2px; color: #444; text-transform: uppercase; }
+.comparison-header .col-pro { color: #ffb000; }
+.comparison-row {
+    display: grid; grid-template-columns: 1fr 100px 100px;
+    padding: 10px 14px; border-bottom: 1px solid #111;
+    font-size: 11px; align-items: center;
+}
+.comparison-row:last-child { border-bottom: none; }
+.comparison-row:hover { background: #0c0c0c; }
+.feat-name { color: #888; }
+.feat-free { text-align: center; color: #333; font-size: 13px; }
+.feat-pro { text-align: center; color: #ffb000; font-size: 13px; }
+.feat-free.yes { color: #4a9e4a; }
+
+.pro-pitch {
+    border: 1px solid #2a1f00; background: rgba(255,176,0,0.03);
+    padding: 20px; margin-bottom: 24px;
+}
+.pro-pitch-header {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
+}
+.pro-badge-lg { font-size: 10px; color: #ffb000; border: 1px solid #ffb000; padding: 3px 8px; letter-spacing: 2px; }
+.pro-pitch-price { font-size: 22px; font-weight: 700; color: #ffb000; }
+.pro-pitch-period { font-size: 11px; color: #555; }
+.pro-pitch p { font-size: 11px; color: #666; line-height: 1.7; margin-bottom: 8px; }
+.pro-pitch .hook { color: #888; font-style: normal; }
+.social-proof { font-size: 10px; color: #444; margin-top: 10px; border-top: 1px solid #1a1a1a; padding-top: 10px; }
 
 /* Buttons */
 .btn {
-    background: #ffb000;
-    color: #0a0a0a;
-    border: none;
-    font-family: inherit;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    padding: 12px 28px;
-    cursor: pointer;
-    transition: opacity 0.15s;
+    background: #ffb000; color: #0a0a0a; border: none;
+    font-family: inherit; font-size: 12px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; padding: 13px 28px; cursor: pointer; transition: opacity 0.15s;
 }
 .btn:hover { opacity: 0.85; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .btn-outline {
-    background: transparent;
-    color: #666;
-    border: 1px solid #333;
-    font-family: inherit;
-    font-size: 12px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    padding: 12px 28px;
-    cursor: pointer;
-    transition: all 0.15s;
+    background: transparent; color: #555; border: 1px solid #2a2a2a;
+    font-family: inherit; font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+    padding: 13px 28px; cursor: pointer; transition: all 0.15s;
 }
 .btn-outline:hover { color: #ccc; border-color: #555; }
-.btn-actions { display: flex; gap: 12px; align-items: center; }
-.skip-link { font-size: 11px; color: #444; cursor: pointer; }
+.btn-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.skip-link { font-size: 11px; color: #333; cursor: pointer; transition: color 0.15s; }
 .skip-link:hover { color: #666; }
+.urgency { font-size: 10px; color: #554400; margin-top: 10px; letter-spacing: 1px; }
 @keyframes blink { 50% { opacity: 0; } }
 </style>
 </head>
@@ -163,31 +157,54 @@ h1 { font-size: 16px; font-weight: 700; color: #ccc; letter-spacing: 1px; margin
 <div id="app">
     <div class="logo">EDROWIRE<span style="animation:blink 1s step-end infinite;">▌</span></div>
 
+    <div class="progress-bar">
+        <div class="progress-seg active" id="prog-1"></div>
+        <div class="progress-seg" id="prog-2"></div>
+        <div class="progress-seg" id="prog-3"></div>
+        <div class="progress-seg" id="prog-4"></div>
+    </div>
+
     <!-- Step 1: Pick preset -->
     <div class="step active" id="step-1">
-        <div class="step-indicator">STEP 1 OF 4</div>
-        <h1>WHAT'S YOUR WIRE?</h1>
-        <div class="subtitle">Choose the news that matters to you. You can fine-tune later.</div>
+        <div class="step-label">STEP 1 OF 4 — CHOOSE YOUR FOCUS</div>
+        <h1>WHAT DO YOU FOLLOW?</h1>
+        <div class="subtitle">Pick the category that fits you best. You'll fine-tune sources next.</div>
         <div class="presets">
             <div class="preset-card" data-preset="tech" onclick="selectPreset(this)">
+                <div class="preset-check">✓</div>
+                <div class="preset-icon">⚡</div>
                 <div class="preset-name">TECH</div>
-                <div class="preset-desc">Technology, startups, AI</div>
+                <div class="preset-desc">AI, startups, software, hardware</div>
+                <div class="preset-sources">TechCrunch · Wired · Ars Technica · The Verge</div>
             </div>
             <div class="preset-card" data-preset="finance" onclick="selectPreset(this)">
+                <div class="preset-check">✓</div>
+                <div class="preset-icon">📈</div>
                 <div class="preset-name">FINANCE</div>
-                <div class="preset-desc">Markets, economy, business</div>
+                <div class="preset-desc">Markets, economy, earnings, macro</div>
+                <div class="preset-sources">Reuters · Bloomberg · WSJ · FT</div>
             </div>
             <div class="preset-card" data-preset="politics" onclick="selectPreset(this)">
+                <div class="preset-check">✓</div>
+                <div class="preset-icon">🏛</div>
                 <div class="preset-name">POLITICS</div>
-                <div class="preset-desc">Government, policy, elections</div>
+                <div class="preset-desc">Government, policy, elections, law</div>
+                <div class="preset-sources">AP · Politico · The Hill · NPR</div>
             </div>
             <div class="preset-card" data-preset="world" onclick="selectPreset(this)">
+                <div class="preset-check">✓</div>
+                <div class="preset-icon">🌐</div>
                 <div class="preset-name">WORLD</div>
-                <div class="preset-desc">International news</div>
+                <div class="preset-desc">International news and geopolitics</div>
+                <div class="preset-sources">BBC · Reuters · Al Jazeera · Guardian</div>
             </div>
             <div class="preset-card preset-all" data-preset="all" onclick="selectPreset(this)">
-                <div class="preset-name">EVERYTHING</div>
-                <div class="preset-desc">All categories — full signal</div>
+                <div class="preset-check">✓</div>
+                <div class="preset-icon">◈</div>
+                <div>
+                    <div class="preset-name">EVERYTHING</div>
+                    <div class="preset-desc">Full signal — all categories, all sources</div>
+                </div>
             </div>
         </div>
         <div class="btn-actions">
@@ -195,48 +212,136 @@ h1 { font-size: 16px; font-weight: 700; color: #ccc; letter-spacing: 1px; margin
         </div>
     </div>
 
-    <!-- Step 2: Fine-tune feeds -->
+    <!-- Step 2: Source bundles -->
     <div class="step" id="step-2">
-        <div class="step-indicator">STEP 2 OF 4</div>
-        <h1>FINE-TUNE YOUR FEEDS</h1>
-        <div class="subtitle">Toggle specific sources on or off.</div>
-        <div class="feed-list" id="feed-list"></div>
+        <div class="step-label">STEP 2 OF 4 — CHOOSE YOUR SOURCES</div>
+        <h1>PICK YOUR SOURCE BUNDLES</h1>
+        <div class="subtitle">Toggle entire source groups on or off. You can always adjust individual feeds in settings.</div>
+        <div class="bundles" id="bundle-list"></div>
         <div class="btn-actions">
             <button class="btn" onclick="goStep(3)">NEXT →</button>
+            <span class="skip-link" onclick="goStep(3)">SKIP</span>
         </div>
     </div>
 
     <!-- Step 3: Name your wire -->
     <div class="step" id="step-3">
-        <div class="step-indicator">STEP 3 OF 4</div>
-        <h1>NAME YOUR WIRE</h1>
-        <div class="subtitle">Give your wire a name. Only you see it.</div>
-        <input type="text" class="wire-name-input" id="wire-name" value="MY WIRE" maxlength="32" spellcheck="false">
+        <div class="step-label">STEP 3 OF 4 — NAME YOUR WIRE</div>
+        <h1>WHAT'S YOUR WIRE CALLED?</h1>
+        <div class="subtitle">Choose a prefix — your wire will always end in WIRE.</div>
+        <div class="wire-preview" id="wire-preview">MYWIRE</div>
+        <div class="wire-input-row">
+            <input type="text" id="wire-prefix" value="MY" maxlength="20" spellcheck="false"
+                   placeholder="EDRO" oninput="updatePreview()">
+            <div class="wire-suffix">WIRE</div>
+        </div>
         <div class="btn-actions">
             <button class="btn" onclick="saveName()">NEXT →</button>
         </div>
     </div>
 
-    <!-- Step 4: You're live -->
+    <!-- Step 4: Live + Pro upsell -->
     <div class="step" id="step-4">
-        <div class="step-indicator">STEP 4 OF 4</div>
+        <div class="step-label">STEP 4 OF 4 — YOU'RE LIVE</div>
         <h1>YOUR WIRE IS LIVE</h1>
-        <div class="subtitle">Personalized news from your selected sources.</div>
+        <div class="subtitle">Personalized signal from your selected sources, updated every 15 minutes.</div>
+
         <div class="live-count" id="live-count">—</div>
-        <div style="font-size:11px;color:#555;margin-bottom:16px;">stories in your feed right now</div>
-        <div class="pro-callout">
-            <div class="pro-badge">⚡ PRO</div>
-            <p>Add custom RSS feeds, reorder categories, and unlock advanced curation.<br>$15/month. Cancel anytime.</p>
+        <div class="live-label">stories in your feed right now</div>
+
+        <div class="pro-pitch">
+            <div class="pro-pitch-header">
+                <span class="pro-badge-lg">PRO</span>
+                <div>
+                    <div class="pro-pitch-price">$15<span class="pro-pitch-period">/month</span></div>
+                </div>
+            </div>
+            <p class="hook">You've built your wire. <strong style="color:#ccc;">Pro turns it into a proper intelligence feed.</strong> Most serious readers upgrade within their first week.</p>
+            <p>Here's exactly what you're leaving on the table:</p>
+            <div class="social-proof">⚡ Early adopter pricing — rate locked for life when you upgrade today</div>
         </div>
+
+        <div class="comparison">
+            <div class="comparison-header">
+                <span>FEATURE</span>
+                <span>FREE</span>
+                <span class="col-pro">PRO</span>
+            </div>
+            <div class="comparison-row">
+                <span class="feat-name">Curated feed bundles</span>
+                <span class="feat-free yes">✓</span>
+                <span class="feat-pro">✓</span>
+            </div>
+            <div class="comparison-row">
+                <span class="feat-name">AI-rewritten headlines</span>
+                <span class="feat-free yes">✓</span>
+                <span class="feat-pro">✓</span>
+            </div>
+            <div class="comparison-row">
+                <span class="feat-name">Custom wire prefix</span>
+                <span class="feat-free yes">✓</span>
+                <span class="feat-pro">✓</span>
+            </div>
+            <div class="comparison-row">
+                <span class="feat-name">Add any RSS feed (unlimited)</span>
+                <span class="feat-free">✗</span>
+                <span class="feat-pro">✓</span>
+            </div>
+            <div class="comparison-row">
+                <span class="feat-name">Custom search queries</span>
+                <span class="feat-free">✗</span>
+                <span class="feat-pro">✓</span>
+            </div>
+            <div class="comparison-row">
+                <span class="feat-name">Reorder category tabs</span>
+                <span class="feat-free">✗</span>
+                <span class="feat-pro">✓</span>
+            </div>
+            <div class="comparison-row">
+                <span class="feat-name">Pin &amp; hide individual stories</span>
+                <span class="feat-free">✗</span>
+                <span class="feat-pro">✓</span>
+            </div>
+            <div class="comparison-row">
+                <span class="feat-name">Priority AI rewriting</span>
+                <span class="feat-free">✗</span>
+                <span class="feat-pro">✓</span>
+            </div>
+            <div class="comparison-row">
+                <span class="feat-name">API access</span>
+                <span class="feat-free">✗</span>
+                <span class="feat-pro">✓</span>
+            </div>
+        </div>
+
         <div class="btn-actions">
-            <button class="btn" onclick="finish()">ENTER MY WIRE</button>
-            <button class="btn-outline" onclick="upgradeNow()">UPGRADE TO PRO</button>
+            <button class="btn" onclick="upgradeNow()">UPGRADE TO PRO — $15/MO</button>
+            <span class="skip-link" onclick="finish()">CONTINUE WITH FREE</span>
         </div>
+        <div class="urgency">⚡ Early adopter rate — lock it in before pricing changes</div>
     </div>
 </div>
 
 <script>
 let selectedPreset = null;
+// category → { icon, label, description, feedIds[] }
+const BUNDLE_META = {
+    tech:     { icon: '⚡', label: 'TECH', desc: 'Technology, AI, startups, software' },
+    markets:  { icon: '📈', label: 'MARKETS', desc: 'Stocks, macro, earnings, crypto' },
+    politics: { icon: '🏛', label: 'POLITICS', desc: 'Government, elections, policy, law' },
+    world:    { icon: '🌐', label: 'WORLD', desc: 'International news, geopolitics' },
+    general:  { icon: '📰', label: 'GENERAL', desc: 'Breaking news, mixed top stories' },
+};
+
+// feeds grouped by category: { category: Feed[] }
+let bundleFeeds = {};
+
+function updateProgress(step) {
+    for (let i = 1; i <= 4; i++) {
+        const seg = document.getElementById('prog-' + i);
+        seg.className = 'progress-seg' + (i < step ? ' done' : i === step ? ' active' : '');
+    }
+}
 
 function selectPreset(card) {
     document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
@@ -256,7 +361,7 @@ async function applyPreset() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ preset: selectedPreset }),
         });
-        await loadFeeds();
+        await loadBundles();
         goStep(2);
     } catch (e) {
         btn.disabled = false;
@@ -264,42 +369,72 @@ async function applyPreset() {
     }
 }
 
-async function loadFeeds() {
+async function loadBundles() {
     const res = await fetch('/api/user/feeds');
     const data = await res.json();
-    const list = document.getElementById('feed-list');
-    list.innerHTML = '';
+
+    // Group feeds by category
+    bundleFeeds = {};
     for (const feed of data.feeds) {
-        const on = feed.subscribed === 1;
-        const div = document.createElement('div');
-        div.className = 'feed-item';
-        div.innerHTML = `
-            <div class="feed-item-info">
-                <div class="feed-item-name">${escHtml(feed.name)}</div>
-                <div class="feed-item-cat">${escHtml(feed.category)}</div>
+        if (!bundleFeeds[feed.category]) bundleFeeds[feed.category] = [];
+        bundleFeeds[feed.category].push(feed);
+    }
+
+    const list = document.getElementById('bundle-list');
+    list.innerHTML = '';
+
+    for (const [cat, feeds] of Object.entries(bundleFeeds)) {
+        const meta = BUNDLE_META[cat] || { icon: '📁', label: cat.toUpperCase(), desc: '' };
+        const enabledCount = feeds.filter(f => f.subscribed === 1).length;
+        const isOn = enabledCount > 0;
+
+        const card = document.createElement('div');
+        card.className = 'bundle-card' + (isOn ? ' on' : '');
+        card.dataset.cat = cat;
+        card.innerHTML = `
+            <div class="bundle-icon">${meta.icon}</div>
+            <div class="bundle-info">
+                <div class="bundle-name">${meta.label}</div>
+                <div class="bundle-detail">${meta.desc}</div>
+                <div class="bundle-count">${feeds.length} source${feeds.length !== 1 ? 's' : ''}</div>
             </div>
-            <div class="toggle ${on ? 'on' : ''}" data-feed-id="${feed.id}" onclick="toggleFeed(this, ${feed.id})"></div>
+            <div class="bundle-toggle ${isOn ? 'on' : ''}" data-cat="${cat}"></div>
         `;
-        list.appendChild(div);
+        card.addEventListener('click', () => toggleBundle(cat, card));
+        list.appendChild(card);
     }
 }
 
-async function toggleFeed(el, feedId) {
-    const on = el.classList.contains('on');
-    el.classList.toggle('on');
-    await fetch(`/api/user/feeds/${feedId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: !on }),
-    });
+async function toggleBundle(cat, card) {
+    const toggle = card.querySelector('.bundle-toggle');
+    const isOn = toggle.classList.contains('on');
+    const newState = !isOn;
+
+    toggle.classList.toggle('on', newState);
+    card.classList.toggle('on', newState);
+
+    const feeds = bundleFeeds[cat] || [];
+    await Promise.all(feeds.map(f =>
+        fetch(`/api/user/feeds/${f.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: newState }),
+        })
+    ));
+    feeds.forEach(f => f.subscribed = newState ? 1 : 0);
+}
+
+function updatePreview() {
+    const prefix = document.getElementById('wire-prefix').value.trim().toUpperCase() || 'MY';
+    document.getElementById('wire-preview').textContent = prefix + 'WIRE';
 }
 
 async function saveName() {
-    const name = document.getElementById('wire-name').value.trim() || 'My Wire';
+    const prefix = document.getElementById('wire-prefix').value.trim().toUpperCase() || 'MY';
     await fetch('/api/user/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wire_name: name }),
+        body: JSON.stringify({ wire_name: prefix }),
     });
     await loadLiveCount();
     goStep(4);
@@ -318,19 +453,15 @@ async function finish() {
     window.location.href = '/';
 }
 
-function upgradeNow() {
-    finish().then(() => {
-        document.querySelector('form[action="/billing/checkout"]')?.submit();
-    });
-    // Fallback: navigate to settings after completing onboarding
-    fetch('/api/user/onboarding/complete', { method: 'POST' }).then(() => {
-        window.location.href = '/settings#billing';
-    });
+async function upgradeNow() {
+    await fetch('/api/user/onboarding/complete', { method: 'POST' });
+    window.location.href = '/settings#billing';
 }
 
 function goStep(n) {
     document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
     document.getElementById('step-' + n).classList.add('active');
+    updateProgress(n);
     window.scrollTo(0, 0);
 }
 
