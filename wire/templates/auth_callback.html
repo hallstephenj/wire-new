@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signing In — EDROWIRE</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a0a; color: #cccccc;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 13px; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    text-align: center;
+}
+.logo { font-size: 28px; font-weight: 700; color: #ffb000; letter-spacing: 4px; margin-bottom: 16px; }
+.msg { color: #555; font-size: 11px; letter-spacing: 1px; }
+.error { color: #e05555; font-size: 11px; margin-top: 16px; }
+@keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div>
+    <div class="logo">EDROWIRE<span style="animation:blink 1s step-end infinite;color:#ffb000;">▌</span></div>
+    <div class="msg" id="msg">SIGNING IN...</div>
+    <div class="error" id="error-msg"></div>
+</div>
+
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const SUPA_URL = '{{SUPABASE_URL}}';
+const SUPA_KEY = '{{SUPABASE_PUBLISHABLE_KEY}}';
+
+const supabase = createClient(SUPA_URL, SUPA_KEY);
+
+async function handleCallback() {
+    // Supabase puts tokens in the URL hash for magic links
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error || !data.session) {
+        // Try exchanging the code/token from URL params (PKCE flow)
+        const params = new URLSearchParams(location.search);
+        const hashParams = new URLSearchParams(location.hash.slice(1));
+
+        const accessToken = hashParams.get('access_token') || params.get('access_token');
+        if (!accessToken) {
+            document.getElementById('error-msg').textContent = 'Sign-in failed — link may have expired. Try again.';
+            document.getElementById('msg').textContent = '';
+            setTimeout(() => window.location.href = '/login', 3000);
+            return;
+        }
+    }
+
+    const session = data.session;
+    if (!session) {
+        document.getElementById('error-msg').textContent = 'No session — link may have expired.';
+        setTimeout(() => window.location.href = '/login', 3000);
+        return;
+    }
+
+    // Set cookie for backend auth
+    const secure = location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `sb-access-token=${session.access_token}; Max-Age=${session.expires_in || 3600}; path=/; SameSite=Lax${secure}`;
+
+    // Ensure profile row exists
+    await fetch('/api/user/me', { method: 'POST' });
+
+    // Redirect based on onboarding state
+    const meRes = await fetch('/api/user/me');
+    const me = await meRes.json();
+    window.location.href = me.onboarding_completed ? '/' : '/onboarding';
+}
+
+handleCallback().catch(e => {
+    document.getElementById('error-msg').textContent = 'Unexpected error: ' + e.message;
+    setTimeout(() => window.location.href = '/login', 3000);
+});
+</script>
+</body>
+</html>

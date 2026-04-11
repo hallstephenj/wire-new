@@ -3,23 +3,19 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login — EDROWIRE</title>
+<title>Sign In — EDROWIRE</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" media="print" onload="this.media='all'">
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
-    background: #0a0a0a;
-    color: #cccccc;
+    background: #0a0a0a; color: #cccccc;
     font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-    font-size: 13px;
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    font-size: 13px; min-height: 100vh; display: flex; align-items: center; justify-content: center;
 }
 .container { width: 100%; max-width: 360px; padding: 32px 24px; }
-.logo { font-size: 28px; font-weight: 700; color: #ffb000; letter-spacing: 4px; margin-bottom: 32px; text-align: center; }
+.logo { font-size: 28px; font-weight: 700; color: #ffb000; letter-spacing: 4px; margin-bottom: 8px; text-align: center; }
+.tagline { text-align: center; font-size: 11px; color: #555; margin-bottom: 32px; letter-spacing: 1px; }
 .form-group { margin-bottom: 16px; }
 label { display: block; font-size: 10px; letter-spacing: 1.5px; text-transform: uppercase; color: #666; margin-bottom: 6px; }
 input {
@@ -35,26 +31,26 @@ input:focus { border-color: #ffb000; }
 .btn:hover { opacity: 0.85; }
 .btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .error { color: #e05555; font-size: 11px; margin-top: 12px; text-align: center; min-height: 16px; }
-.footer-links { margin-top: 24px; text-align: center; font-size: 11px; color: #555; }
-.footer-links a { color: #666; text-decoration: none; }
-.footer-links a:hover { color: #ffb000; }
+.success { color: #4a9e4a; font-size: 11px; margin-top: 12px; text-align: center; line-height: 1.6; }
+.hint { font-size: 11px; color: #444; margin-top: 8px; text-align: center; }
 @keyframes blink { 50% { opacity: 0; } }
 </style>
 </head>
 <body>
 <div class="container">
     <div class="logo">EDROWIRE<span style="animation:blink 1s step-end infinite;color:#ffb000;">▌</span></div>
+    <div class="tagline">YOUR WIRE. YOUR SIGNAL.</div>
     <div class="form-group">
         <label for="email">Email</label>
         <input type="email" id="email" autocomplete="email" placeholder="you@example.com">
     </div>
-    <div class="form-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" autocomplete="current-password" placeholder="••••••••">
-    </div>
-    <button class="btn" id="login-btn" onclick="doLogin()">Sign In</button>
+    <button class="btn" id="send-btn" onclick="doSendLink()">Send Magic Link</button>
     <div class="error" id="error-msg"></div>
-    <div class="footer-links"><a href="/register">Create account</a></div>
+    <div id="success-msg" class="success" style="display:none;">
+        Check your inbox — we sent a sign-in link.<br>
+        <span style="color:#555;font-size:10px;">You can close this tab.</span>
+    </div>
+    <div class="hint" id="hint-msg">No password needed. Works for new and existing accounts.</div>
 </div>
 
 <script type="module">
@@ -69,59 +65,45 @@ if (!SUPA_URL || !SUPA_KEY) {
 
 const supabase = createClient(SUPA_URL, SUPA_KEY);
 
-function setAuthCookie(session) {
-    const secure = location.protocol === 'https:' ? '; Secure' : '';
-    const maxAge = session.expires_in || 3600;
-    document.cookie = `sb-access-token=${session.access_token}; Max-Age=${maxAge}; path=/; SameSite=Lax${secure}`;
-}
-
-window.doLogin = async function() {
+window.doSendLink = async function() {
     const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-    const btn = document.getElementById('login-btn');
+    const btn = document.getElementById('send-btn');
     const err = document.getElementById('error-msg');
     err.textContent = '';
 
-    if (!email || !password) { err.textContent = 'Email and password required.'; return; }
+    if (!email) { err.textContent = 'Email required.'; return; }
 
     btn.disabled = true;
-    btn.textContent = 'SIGNING IN...';
+    btn.textContent = 'SENDING...';
+
+    const redirectTo = `${location.origin}/auth/callback`;
 
     try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithOtp({
+            email,
+            options: { emailRedirectTo: redirectTo }
+        });
 
         if (error) {
-            err.textContent = error.message || 'Sign in failed.';
+            err.textContent = error.message || 'Failed to send link.';
             btn.disabled = false;
-            btn.textContent = 'SIGN IN';
+            btn.textContent = 'SEND MAGIC LINK';
             return;
         }
 
-        if (!data.session) {
-            err.textContent = 'No session returned — confirm your email first.';
-            btn.disabled = false;
-            btn.textContent = 'SIGN IN';
-            return;
-        }
-
-        setAuthCookie(data.session);
-
-        // Ensure profile row exists in SQLite
-        await fetch('/api/user/me', { method: 'POST' });
-
-        const meRes = await fetch('/api/user/me');
-        const me = await meRes.json();
-        window.location.href = me.onboarding_completed ? '/' : '/onboarding';
+        document.getElementById('success-msg').style.display = 'block';
+        document.getElementById('hint-msg').style.display = 'none';
+        btn.textContent = 'LINK SENT';
 
     } catch (e) {
         err.textContent = 'Unexpected error: ' + e.message;
         btn.disabled = false;
-        btn.textContent = 'SIGN IN';
+        btn.textContent = 'SEND MAGIC LINK';
     }
 };
 
-document.getElementById('password').addEventListener('keydown', e => {
-    if (e.key === 'Enter') window.doLogin();
+document.getElementById('email').addEventListener('keydown', e => {
+    if (e.key === 'Enter') window.doSendLink();
 });
 </script>
 </body>

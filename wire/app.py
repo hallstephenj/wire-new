@@ -237,6 +237,7 @@ _PRIVACY_HTML = (_TEMPLATES_DIR / "privacy.html").read_text()
 _TERMS_HTML = (_TEMPLATES_DIR / "terms.html").read_text()
 _LOGIN_HTML = (_TEMPLATES_DIR / "login.html").read_text()
 _REGISTER_HTML = (_TEMPLATES_DIR / "register.html").read_text()
+_AUTH_CALLBACK_HTML = (_TEMPLATES_DIR / "auth_callback.html").read_text()
 _ONBOARDING_HTML = (_TEMPLATES_DIR / "onboarding.html").read_text()
 _SETTINGS_HTML = (_TEMPLATES_DIR / "settings.html").read_text()
 
@@ -633,6 +634,11 @@ async def register_page(request: Request):
     if user:
         return RedirectResponse(url="/", status_code=302)
     return HTMLResponse(_inject_supabase(_REGISTER_HTML))
+
+
+@app.get("/auth/callback", response_class=HTMLResponse)
+async def auth_callback():
+    return HTMLResponse(_inject_supabase(_AUTH_CALLBACK_HTML))
 
 
 @app.get("/onboarding", response_class=HTMLResponse)
