@@ -29,9 +29,6 @@ feeds:
     # #9 CNBC (3.66%)
     - name: "CNBC"
       url: "https://www.cnbc.com/id/19854910/device/rss/rss.html"
-    # #10 The Information (3.57%)
-    - name: "The Information"
-      url: "https://www.theinformation.com/feed"
     # #11 Washington Post (2.53%)
     - name: "Washington Post"
       url: "https://feeds.washingtonpost.com/rss/business/technology"
@@ -59,9 +56,6 @@ feeds:
     # #20 Android Authority (0.85%)
     - name: "Android Authority"
       url: "https://www.androidauthority.com/feed/"
-    # #21 Forbes (0.74%)
-    - name: "Forbes"
-      url: "https://www.forbes.com/news/index.xml"
     # #22 9to5Google (0.70%)
     - name: "9to5Google"
       url: "https://9to5google.com/feed/"
@@ -138,8 +132,6 @@ feeds:
       url: "https://www.theblock.co/rss.xml"
     - name: "MarketWatch"
       url: "https://www.marketwatch.com/rss/topstories"
-    - name: "Seeking Alpha"
-      url: "https://seekingalpha.com/market-news/rss.xml"
     - name: "Bloomberg Markets"
       url: "https://feeds.bloomberg.com/markets/news.rss"
     - name: "CNBC Markets"
@@ -148,9 +140,6 @@ feeds:
       url: "https://www.ft.com/markets?format=rss"
 
   politics:
-    # #18 Politico (1.07%)
-    - name: "Politico"
-      url: "https://www.politico.com/rss/politicopicks.xml"
     # #46 ProPublica (0.23%)
     - name: "ProPublica"
       url: "https://www.propublica.org/feeds/propublica/main"
@@ -165,8 +154,6 @@ feeds:
       url: "https://www.nextgov.com/rss/all/"
     - name: "The Hill Politics"
       url: "https://thehill.com/news/feed/"
-    - name: "Politico Congress"
-      url: "https://www.politico.com/rss/congress.xml"
     - name: "The Hill"
       url: "https://thehill.com/rss/syndicator/19109"
     - name: "NBC Politics"
@@ -180,8 +167,6 @@ feeds:
       url: "https://www.huffpost.com/section/politics/feed"
     - name: "Slate"
       url: "https://slate.com/feeds/all.rss"
-    - name: "The Daily Beast"
-      url: "https://feeds.thedailybeast.com/rss/articles"
     - name: "The Intercept"
       url: "https://theintercept.com/feed/?rss"
     - name: "Mother Jones"
@@ -194,9 +179,9 @@ feeds:
   general:
     # Major breaking news feeds (broad coverage, all categories)
     - name: "Associated Press"
-      url: "https://rsshub.app/apnews/topics/apf-topnews"
+      url: "https://apnews.com/apf-topnews?format=rss"
     - name: "CNN"
-      url: "https://rss.cnn.com/rss/edition.rss"
+      url: "https://rss.cnn.com/rss/cnn_topstories.rss"
     - name: "NPR"
       url: "https://feeds.npr.org/1001/rss.xml"
     - name: "ABC News"

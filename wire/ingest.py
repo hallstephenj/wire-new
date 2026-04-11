@@ -329,7 +329,7 @@ async def poll_feeds(on_progress=None):
                 n = await _poll_single_feed(feed["url"], feed["name"], category)
                 count += n
             except Exception as e:
-                log.warning(f"Feed error {feed['name']}: {e}")
+                log.warning(f"Feed error {feed['name']}: {str(e).splitlines()[0]}")
             completed += 1
             if on_progress:
                 on_progress(completed, total)
@@ -450,7 +450,7 @@ async def search_sweep(on_progress=None):
                 n = await _poll_single_feed(url, "Google News", cat)
                 count += n
             except Exception as e:
-                log.warning(f"Search sweep error for '{query}': {e}")
+                log.warning(f"Search sweep error for '{query}': {str(e).splitlines()[0]}")
             if on_progress:
                 on_progress(idx + 1, len(queries))
     ev("ingest_done", job="search", items=count)
@@ -579,7 +579,7 @@ async def backfill_48h(on_progress=None):
                 n = await _poll_single_feed(url, name, category)
                 total += n
             except Exception as e:
-                log.warning(f"Backfill error for '{name}': {e}")
+                log.warning(f"Backfill error for '{name}': {str(e).splitlines()[0]}")
             completed += 1
             if on_progress and completed % _progress_batch == 0:
                 on_progress(completed, total_ops)
