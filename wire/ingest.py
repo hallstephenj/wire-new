@@ -351,9 +351,10 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
     resp.raise_for_status()
 
     feed = await asyncio.to_thread(feedparser.parse, resp.text)
-    conn = get_conn()
-    count = 0
 
+    # Async-only phase: collect entries and resolve Google News redirect URLs.
+    # No DB work here — all of that moves to _write_feed_entries() in a thread.
+    entries = []
     for entry in feed.entries[:50]:
         link = getattr(entry, "link", None)
         title = getattr(entry, "title", None)
@@ -363,7 +364,6 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
         # Extract real source from Google News entries
         item_name = name
         if name == "Google News":
-            # feedparser exposes <source> element; title also ends with " - Source"
             if hasattr(entry, "source") and hasattr(entry.source, "title"):
                 item_name = entry.source.title
                 title = title.rsplit(" - " + item_name, 1)[0] if title.endswith(" - " + item_name) else title
@@ -372,58 +372,69 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
 
         item_name = _normalize_source(item_name)
 
-        # Resolve Google News redirect URLs to actual article URLs
+        # Resolve Google News redirect URLs (requires async HTTP)
         if "news.google.com" in link:
             link = await _unwrap_google_news_url(link, client)
 
+        entries.append((title, link, item_name, parse_published(entry)))
+
+    if not entries:
+        return 0
+
+    # Hand all DB work + TF-IDF clustering off the event loop so web requests
+    # aren't blocked while we're crunching through 1600+ clusters per entry.
+    return await asyncio.to_thread(_write_feed_entries, entries, url, category)
+
+
+def _write_feed_entries(entries: list, feed_url: str, category: str) -> int:
+    """Sync worker: runs in thread pool. Dedup, filter, cluster, and insert entries."""
+    cfg = load_config()
+    lookback = cfg.get("clustering", {}).get("lookback_hours", 72)
+
+    conn = get_conn()
+    count = 0
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+
+    for title, link, item_name, published in entries:
+        # Reject stale articles — they create zombie clusters and corrupt rewrites
+        if published:
+            try:
+                pub_dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
+                if pub_dt.tzinfo is None:
+                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                if (now_dt - pub_dt).total_seconds() / 3600 > lookback:
+                    continue
+            except Exception:
+                pass
+
         # Exact URL dedup
-        existing = conn.execute("SELECT id FROM raw_items WHERE source_url=?", (link,)).fetchone()
-        if existing:
+        if conn.execute("SELECT id FROM raw_items WHERE source_url=?", (link,)).fetchone():
             continue
 
         # Headline + source dedup (catches Google News duplicates with different URLs)
-        existing = conn.execute(
+        if conn.execute(
             "SELECT id FROM raw_items WHERE original_headline=? AND source_name=?",
             (title, item_name)
-        ).fetchone()
-        if existing:
+        ).fetchone():
             continue
 
         # Filter out product reviews, deals, affiliate/sponsored content
         matched_filter = _check_filters(title)
         if matched_filter:
             log.debug(f"Filtered ({matched_filter['name']}): {title}")
-            now_f = datetime.now(timezone.utc).isoformat()
             conn.execute(
                 "INSERT INTO filtered_items (headline, source_name, source_url, feed_url, category, filter_id, filter_name, filter_pattern, filtered_at) VALUES (?,?,?,?,?,?,?,?,?)",
-                (title, item_name, link, url, category, matched_filter["id"], matched_filter["name"], matched_filter["pattern"], now_f)
+                (title, item_name, link, feed_url, category, matched_filter["id"], matched_filter["name"], matched_filter["pattern"], now)
             )
             continue
 
         item_id = str(uuid.uuid4())
-        published = parse_published(entry)
-        now = datetime.now(timezone.utc)
-
-        # Reject articles older than the lookback window — stale articles
-        # create zombie clusters and corrupt rewrite headlines.
-        if published:
-            try:
-                pub_dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
-                if pub_dt.tzinfo is None:
-                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
-                age_hours = (now - pub_dt).total_seconds() / 3600
-                lookback = cfg.get("clustering", {}).get("lookback_hours", 72)
-                if age_hours > lookback:
-                    continue
-            except Exception:
-                pass
-
-        now = now.isoformat()
         cluster_id = assign_cluster(conn, title, link, item_name, category, published_at=published)
 
         conn.execute(
             "INSERT INTO raw_items (id, source_url, source_name, original_headline, published_at, ingested_at, feed_url, category, cluster_id) VALUES (?,?,?,?,?,?,?,?,?)",
-            (item_id, link, item_name, title, published, now, url, category, cluster_id)
+            (item_id, link, item_name, title, published, now, feed_url, category, cluster_id)
         )
         count += 1
 
