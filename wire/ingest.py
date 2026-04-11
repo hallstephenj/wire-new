@@ -349,7 +349,7 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
     resp = await client.get(url)
     resp.raise_for_status()
 
-    feed = feedparser.parse(resp.text)
+    feed = await asyncio.to_thread(feedparser.parse, resp.text)
     conn = get_conn()
     count = 0
 
