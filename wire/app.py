@@ -24,8 +24,12 @@ from wire.scores import all_scores, get_score
 from wire.reference import run_reference_check, init_ref_http_client, close_ref_http_client
 from wire.algorithm import get_active_version, build_source_quality_case, build_reputable_sources_sql, build_hot_score_sql, build_market_mover_case_sql, list_versions, set_active_version
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("wire")
+# Suppress noisy scheduler ticks and httpx request logs
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 
 scheduler = AsyncIOScheduler()
 
@@ -769,16 +773,28 @@ async def toggle_feed(feed_id: int, request: Request, user=Depends(require_user)
     now = datetime.now(timezone.utc).isoformat()
 
     def _write():
+        import sqlite3
         conn = get_conn()
-        conn.execute("""
-            INSERT INTO user_feed_subscriptions (user_id, feed_source_id, enabled, created_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(user_id, feed_source_id) DO UPDATE SET enabled = excluded.enabled
-        """, (user_id, feed_id, enabled, now))
-        conn.commit()
-        conn.close()
+        try:
+            # Verify feed exists before inserting subscription
+            exists = conn.execute("SELECT 1 FROM feed_sources WHERE id=?", (feed_id,)).fetchone()
+            if not exists:
+                return False
+            conn.execute("""
+                INSERT INTO user_feed_subscriptions (user_id, feed_source_id, enabled, created_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id, feed_source_id) DO UPDATE SET enabled = excluded.enabled
+            """, (user_id, feed_id, enabled, now))
+            conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+        finally:
+            conn.close()
 
-    await asyncio.to_thread(_write)
+    ok = await asyncio.to_thread(_write)
+    if not ok:
+        raise HTTPException(404, detail="Feed not found")
     return {"ok": True}
 
 

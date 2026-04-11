@@ -332,7 +332,7 @@ async def check_references(on_progress=None) -> dict:
             headlines = await fetch_site(site["url"], site["parser"], site["max_headlines"])
             site_found = len(headlines)
             total_found += site_found
-            log.info(f"Reference check: {site['name']} — {site_found} headlines")
+            log.debug(f"Reference check: {site['name']} — {site_found} headlines")
         except Exception as e:
             log.error(f"Reference check failed for {site['name']}: {e}")
             conn = get_conn()

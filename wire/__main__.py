@@ -8,4 +8,4 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 cfg = load_config()
 port = int(os.environ.get("PORT", cfg["server"]["port"]))
-uvicorn.run("wire.app:app", host=cfg["server"]["host"], port=port, reload=False)
+uvicorn.run("wire.app:app", host=cfg["server"]["host"], port=port, reload=False, access_log=False)

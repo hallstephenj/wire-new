@@ -314,7 +314,7 @@ def _load_feeds_from_db():
     return [(cat, f) for cat, feeds in feeds_cfg["feeds"].items() for f in feeds]
 
 async def poll_feeds(on_progress=None):
-    log.info("Polling RSS feeds...")
+    log.debug("Polling RSS feeds...")
     ev("ingest_start", job="rss")
     all_feeds = _load_feeds_from_db()
     total = len(all_feeds)
@@ -336,7 +336,8 @@ async def poll_feeds(on_progress=None):
 
     await asyncio.gather(*[_poll_one(cat, f) for cat, f in all_feeds])
     ev("ingest_done", job="rss", items=count)
-    log.info(f"Ingested {count} new items")
+    if count > 0:
+        log.info(f"RSS poll: {count} new items")
     # Immediately rewrite any high-coverage clusters that need it
     if count > 0:
         try:
@@ -433,12 +434,12 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
 async def search_sweep(on_progress=None):
     cfg = load_config()
     queries = cfg.get("search", {}).get("queries", [])
-    log.info("Running search sweep...")
+    log.debug("Running search sweep...")
     ev("ingest_start", job="search")
     # Use Google News RSS as search proxy — skip if consent wall active
     count = 0
     if _gnews_blocked:
-        log.info("Skipping search sweep (Google News consent wall active)")
+        log.debug("Skipping search sweep (Google News consent wall active)")
         if on_progress:
             on_progress(len(queries), len(queries))
     else:
@@ -453,7 +454,8 @@ async def search_sweep(on_progress=None):
             if on_progress:
                 on_progress(idx + 1, len(queries))
     ev("ingest_done", job="search", items=count)
-    log.info(f"Search sweep ingested {count} new items")
+    if count > 0:
+        log.info(f"Search sweep: {count} new items")
     if count > 0:
         try:
             await urgent_rewrite()
@@ -547,7 +549,7 @@ BACKFILL_QUERIES = {
 
 async def backfill_48h(on_progress=None):
     """Deep sweep via Google News to backfill the last 72 hours of stories."""
-    log.info("Starting deep backfill sweep...")
+    log.debug("Starting deep backfill sweep...")
     ev("ingest_start", job="backfill")
     total = 0
     completed = 0
@@ -561,7 +563,7 @@ async def backfill_48h(on_progress=None):
                     url = f"https://news.google.com/rss/search?q={query.replace(' ', '+')}+{time_scope}&hl=en-US&gl=US&ceid=US:en"
                     ops.append((url, "Google News", category))
     else:
-        log.info("Skipping Google News backfill queries (consent wall active)")
+        log.debug("Skipping Google News backfill queries (consent wall active)")
     db_feeds = _load_feeds_from_db()
     for category, feed in db_feeds:
         ops.append((feed["url"], feed["name"], category))

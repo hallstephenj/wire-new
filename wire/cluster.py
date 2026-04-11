@@ -483,7 +483,7 @@ def _do_merge(conn, rows, i, j, now, merged):
         if rel >= MERGE_ITEM_FLOOR:
             conn.execute("UPDATE raw_items SET cluster_id=? WHERE id=?", (winner_id, item["id"]))
         else:
-            log.info(f"Merge skip: '{(item['original_headline'] or '')[:60]}' irrelevant to '{winner_headline[:60]}' (rel={rel:.3f})")
+            log.debug(f"Merge skip: '{(item['original_headline'] or '')[:60]}' irrelevant to '{winner_headline[:60]}' (rel={rel:.3f})")
             # Orphan it — set cluster_id to NULL so it doesn't pollute
             conn.execute("UPDATE raw_items SET cluster_id=NULL WHERE id=?", (item["id"],))
 
@@ -552,7 +552,7 @@ def merge_existing_clusters(conn):
             if rows[j]["id"] in merged:
                 continue
             if sim_matrix[i, j] >= merge_tfidf:
-                log.info(f"TF-IDF merge: '{headlines[i][:60]}' ← '{headlines[j][:60]}' (sim={sim_matrix[i, j]:.3f})")
+                log.debug(f"TF-IDF merge: '{headlines[i][:60]}' ← '{headlines[j][:60]}' (sim={sim_matrix[i, j]:.3f})")
                 ev("dedup_merge", winner=headlines[i][:80], loser=headlines[j][:80], similarity=round(float(sim_matrix[i, j]), 3), method="tfidf")
                 _do_merge(conn, rows, i, j, now, merged)
                 merge_count += 1
@@ -613,7 +613,7 @@ def merge_existing_clusters(conn):
             if rows2[j]["id"] in merged2:
                 continue
             if embed_sim[i, j] >= EMBED_THRESHOLD:
-                log.info(f"Embedding merge: '{headlines2[i][:60]}' ← '{headlines2[j][:60]}' (sim={embed_sim[i, j]:.3f})")
+                log.debug(f"Embedding merge: '{headlines2[i][:60]}' ← '{headlines2[j][:60]}' (sim={embed_sim[i, j]:.3f})")
                 ev("dedup_merge", winner=headlines2[i][:80], loser=headlines2[j][:80], similarity=round(float(embed_sim[i, j]), 3), method="embedding")
                 _do_merge(conn, rows2, i, j, now, merged2)
                 merge_count += 1
