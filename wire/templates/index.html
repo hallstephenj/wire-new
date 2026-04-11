@@ -580,6 +580,12 @@ header {
                 <button class="tab" data-cat="politics">POLITICS</button>
                 <button class="tab" data-cat="world">WORLD</button>
             </div>
+            <span class="separator">│</span>
+            <div id="user-menu" style="display:flex;align-items:center;gap:8px;font-size:11px;color:#666;">
+                <a href="/settings" style="color:#666;text-decoration:none;letter-spacing:1px;text-transform:uppercase;" title="Settings">⚙ SETTINGS</a>
+                <span style="color:#333;">│</span>
+                <button id="logout-btn" onclick="doLogout()" style="background:transparent;border:none;color:#555;font-family:inherit;font-size:11px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;padding:0;">LOGOUT</button>
+            </div>
         </div>
     </header>
     <div id="stories"><div class="loading">Connecting to EDROWIRE...</div></div>
@@ -600,6 +606,11 @@ header {
 </div>
 
 <script>
+function doLogout() {
+    document.cookie = 'sb-access-token=; Max-Age=0; path=/; SameSite=Lax';
+    window.location.href = '/login';
+}
+
 const AD_INTERVAL = 25;
 const PAGE_SIZE = 20;
 let currentSort = 'hot';

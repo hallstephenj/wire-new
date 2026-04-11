@@ -4,11 +4,14 @@ import asyncio
 from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query, Request, Depends
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pathlib import Path
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+from wire.auth import get_current_user, require_user, require_admin, require_pro
+from wire.billing import create_checkout, create_portal, handle_webhook
 
 from wire.db import init_db, get_conn
 from wire.config import load_config, set_override, get_overrides
@@ -208,8 +211,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+from fastapi import HTTPException as _HTTPException
+from fastapi.exception_handlers import http_exception_handler as _http_exception_handler
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    if isinstance(exc, _HTTPException):
+        return await _http_exception_handler(request, exc)
     log.error(f"Unhandled error on {request.url.path}: {exc}", exc_info=True)
     return JSONResponse(status_code=500, content={"error": str(exc)})
 
@@ -225,23 +233,48 @@ _ABOUT_HTML = (_TEMPLATES_DIR / "about.html").read_text()
 _CONTACT_HTML = (_TEMPLATES_DIR / "contact.html").read_text()
 _PRIVACY_HTML = (_TEMPLATES_DIR / "privacy.html").read_text()
 _TERMS_HTML = (_TEMPLATES_DIR / "terms.html").read_text()
+_LOGIN_HTML = (_TEMPLATES_DIR / "login.html").read_text()
+_REGISTER_HTML = (_TEMPLATES_DIR / "register.html").read_text()
+_ONBOARDING_HTML = (_TEMPLATES_DIR / "onboarding.html").read_text()
+_SETTINGS_HTML = (_TEMPLATES_DIR / "settings.html").read_text()
+
+ONBOARDING_PRESETS = {
+    "tech":     ["tech"],
+    "finance":  ["markets", "tech"],
+    "politics": ["politics", "general"],
+    "world":    ["world", "general"],
+    "all":      ["tech", "markets", "politics", "world", "general"],
+}
 
 @app.get("/", response_class=HTMLResponse)
-async def index():
-    return HTMLResponse(_INDEX_HTML)
+async def index(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return HTMLResponse(_inject_supabase(_INDEX_HTML))
 
 @app.get("/api/boot-status")
 async def boot_status():
     return boot_state
 
+def _user_has_subscriptions(conn, user_id: str) -> bool:
+    row = conn.execute(
+        "SELECT COUNT(*) as c FROM user_feed_subscriptions WHERE user_id=? AND enabled=1",
+        (user_id,)
+    ).fetchone()
+    return row["c"] > 0
+
+
 @app.get("/api/stories")
 async def get_stories(
+    request: Request,
     sort: str = Query("hot", pattern="^(hot|new)$"),
     category: str = Query("all", pattern="^(all|markets|tech|politics|world|general)$"),
     since: str | None = None,
     limit: int = Query(20, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ):
+    user = await get_current_user(request)
     conn = get_conn()
     now = datetime.now(timezone.utc).isoformat()
     algo = get_active_version()
@@ -252,10 +285,44 @@ async def get_stories(
     # Hide curated-hidden stories from homepage
     where.append("(co.hidden IS NULL OR co.hidden = 0)")
 
+    # Apply user-level hidden overrides
+    if user:
+        where.append("""NOT EXISTS (
+            SELECT 1 FROM user_curation_overrides uco
+            WHERE uco.cluster_id = sc.id AND uco.user_id = ? AND uco.hidden = 1
+        )""")
+        params.append(user["id"])
+
+    # Personalized feed filter: restrict to subscribed feeds if user has subscriptions
+    personalized = user and _user_has_subscriptions(conn, user["id"])
+    if personalized:
+        where.append("""EXISTS (
+            SELECT 1 FROM raw_items ri
+            JOIN feed_sources fs ON fs.url = ri.feed_url
+            JOIN user_feed_subscriptions ufs ON ufs.feed_source_id = fs.id
+            WHERE ri.cluster_id = sc.id
+            AND ufs.user_id = ?
+            AND ufs.enabled = 1
+        )""")
+        params.append(user["id"])
+
     if category == "all":
         # Exclude "general" bucket from the all view
         if algo.get("general_exclusion", True):
             where.append("COALESCE(co.category_override, sc.category) != 'general'")
+        # Apply user hidden_categories
+        if user and user.get("id"):
+            prefs_row = conn.execute(
+                "SELECT hidden_categories FROM user_preferences WHERE user_id=?", (user["id"],)
+            ).fetchone()
+            if prefs_row and prefs_row["hidden_categories"]:
+                try:
+                    hidden_cats = json.loads(prefs_row["hidden_categories"])
+                    for hc in hidden_cats:
+                        where.append("COALESCE(co.category_override, sc.category) != ?")
+                        params.append(hc)
+                except Exception:
+                    pass
     else:
         where.append("COALESCE(co.category_override, sc.category) = ?")
         params.append(category)
@@ -536,8 +603,267 @@ async def audit_data(mode: str = Query(..., pattern="^(ranking|clustering|catego
     conn.close()
     return result
 
+import os as _os
+_SUPABASE_URL = _os.environ.get("SUPABASE_URL", "")
+_SUPABASE_PUBLISHABLE_KEY = _os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
+
+def _inject_supabase(html: str) -> str:
+    return html.replace("'{{SUPABASE_URL}}'", f"'{_SUPABASE_URL}'") \
+               .replace("'{{SUPABASE_PUBLISHABLE_KEY}}'", f"'{_SUPABASE_PUBLISHABLE_KEY}'")
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    user = await get_current_user(request)
+    if user:
+        return RedirectResponse(url="/", status_code=302)
+    return HTMLResponse(_inject_supabase(_LOGIN_HTML))
+
+
+@app.get("/register", response_class=HTMLResponse)
+async def register_page(request: Request):
+    user = await get_current_user(request)
+    if user:
+        return RedirectResponse(url="/", status_code=302)
+    return HTMLResponse(_inject_supabase(_REGISTER_HTML))
+
+
+@app.get("/onboarding", response_class=HTMLResponse)
+async def onboarding_page(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    if user.get("onboarding_completed"):
+        return RedirectResponse(url="/", status_code=302)
+    return HTMLResponse(_ONBOARDING_HTML)
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return HTMLResponse(_SETTINGS_HTML)
+
+
+# ---------------------------------------------------------------------------
+# Billing routes
+# ---------------------------------------------------------------------------
+
+@app.post("/billing/checkout")
+async def billing_checkout(request: Request, user=Depends(require_user)):
+    url = await create_checkout(user)
+    return RedirectResponse(url=url, status_code=303)
+
+
+@app.post("/billing/portal")
+async def billing_portal(request: Request, user=Depends(require_user)):
+    if not user.get("stripe_customer_id"):
+        raise HTTPException(400, detail="No billing account found")
+    url = await create_portal(user)
+    return RedirectResponse(url=url, status_code=303)
+
+
+@app.post("/billing/webhook")
+async def billing_webhook(request: Request):
+    return await handle_webhook(request)
+
+
+# ---------------------------------------------------------------------------
+# User API
+# ---------------------------------------------------------------------------
+
+@app.get("/api/user/me")
+async def user_me(request: Request, user=Depends(require_user)):
+    conn = get_conn()
+    prefs = conn.execute(
+        "SELECT * FROM user_preferences WHERE user_id=?", (user["id"],)
+    ).fetchone()
+    conn.close()
+    return {
+        "id": user["id"],
+        "display_name": user.get("display_name"),
+        "is_admin": bool(user.get("is_admin")),
+        "subscription_status": user.get("subscription_status", "free"),
+        "onboarding_completed": bool(user.get("onboarding_completed")),
+        "preferences": dict(prefs) if prefs else None,
+    }
+
+
+@app.post("/api/user/me")
+async def user_create_profile(request: Request, user=Depends(require_user)):
+    """Called after Supabase registration to create the SQLite profile row."""
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute("""
+        INSERT OR IGNORE INTO user_profiles (id, subscription_status, onboarding_completed, created_at, updated_at)
+        VALUES (?, 'free', 0, ?, ?)
+    """, (user["id"], now, now))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.put("/api/user/preferences")
+async def update_preferences(request: Request, user=Depends(require_user)):
+    body = await request.json()
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute("""
+        INSERT INTO user_preferences (user_id, wire_name, hidden_categories, category_order, show_general, default_sort, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            wire_name = COALESCE(excluded.wire_name, wire_name),
+            hidden_categories = COALESCE(excluded.hidden_categories, hidden_categories),
+            category_order = COALESCE(excluded.category_order, category_order),
+            show_general = COALESCE(excluded.show_general, show_general),
+            default_sort = COALESCE(excluded.default_sort, default_sort),
+            updated_at = excluded.updated_at
+    """, (
+        user["id"],
+        body.get("wire_name"),
+        body.get("hidden_categories"),
+        body.get("category_order"),
+        body.get("show_general"),
+        body.get("default_sort"),
+        now,
+    ))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.get("/api/user/feeds")
+async def user_feeds(request: Request, user=Depends(require_user)):
+    conn = get_conn()
+    rows = conn.execute("""
+        SELECT fs.id, fs.name, fs.url, fs.category, fs.enabled as source_enabled,
+               ufs.enabled as subscribed
+        FROM feed_sources fs
+        LEFT JOIN user_feed_subscriptions ufs ON ufs.feed_source_id = fs.id AND ufs.user_id = ?
+        WHERE fs.enabled = 1
+        ORDER BY fs.category, fs.name
+    """, (user["id"],)).fetchall()
+    conn.close()
+    return {"feeds": [dict(r) for r in rows]}
+
+
+@app.put("/api/user/feeds/{feed_id}")
+async def toggle_feed(feed_id: int, request: Request, user=Depends(require_user)):
+    body = await request.json()
+    enabled = 1 if body.get("enabled") else 0
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute("""
+        INSERT INTO user_feed_subscriptions (user_id, feed_source_id, enabled, created_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(user_id, feed_source_id) DO UPDATE SET enabled = excluded.enabled
+    """, (user["id"], feed_id, enabled, now))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.post("/api/user/feeds/custom")
+async def add_custom_feed(request: Request, user=Depends(require_pro)):
+    body = await request.json()
+    url = body.get("url", "").strip()
+    name = body.get("name", url).strip()
+    category = body.get("category", "general").strip()
+    if not url:
+        raise HTTPException(400, detail="URL required")
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO feed_sources (name, url, category, enabled, created_at, updated_at) VALUES (?,?,?,1,?,?)",
+            (name, url, category, now, now)
+        )
+        fs = conn.execute("SELECT id FROM feed_sources WHERE url=?", (url,)).fetchone()
+        conn.execute("""
+            INSERT OR IGNORE INTO user_feed_subscriptions (user_id, feed_source_id, enabled, created_at)
+            VALUES (?, ?, 1, ?)
+        """, (user["id"], fs["id"], now))
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+@app.post("/api/user/onboarding/preset")
+async def onboarding_preset(request: Request, user=Depends(require_user)):
+    body = await request.json()
+    preset = body.get("preset")
+    if preset not in ONBOARDING_PRESETS:
+        raise HTTPException(400, detail="Unknown preset")
+    categories = ONBOARDING_PRESETS[preset]
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+    feeds = conn.execute(
+        "SELECT id FROM feed_sources WHERE category IN ({}) AND enabled=1".format(
+            ",".join("?" for _ in categories)
+        ),
+        categories
+    ).fetchall()
+    for feed in feeds:
+        conn.execute("""
+            INSERT OR IGNORE INTO user_feed_subscriptions (user_id, feed_source_id, enabled, created_at)
+            VALUES (?, ?, 1, ?)
+        """, (user["id"], feed["id"], now))
+    conn.commit()
+    conn.close()
+    return {"ok": True, "subscribed": len(feeds)}
+
+
+@app.post("/api/user/onboarding/complete")
+async def onboarding_complete(request: Request, user=Depends(require_user)):
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute("""
+        INSERT OR IGNORE INTO user_profiles (id, subscription_status, onboarding_completed, created_at, updated_at)
+        VALUES (?, 'free', 1, ?, ?)
+    """, (user["id"], now, now))
+    conn.execute(
+        "UPDATE user_profiles SET onboarding_completed=1, updated_at=? WHERE id=?",
+        (now, user["id"])
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
+@app.get("/api/user/curation")
+async def user_curation(request: Request, user=Depends(require_user)):
+    conn = get_conn()
+    rows = conn.execute(
+        "SELECT cluster_id, pinned, hidden FROM user_curation_overrides WHERE user_id=?",
+        (user["id"],)
+    ).fetchall()
+    conn.close()
+    return {"overrides": [dict(r) for r in rows]}
+
+
+@app.post("/api/user/curation/{cluster_id}")
+async def set_user_curation(cluster_id: str, request: Request, user=Depends(require_user)):
+    body = await request.json()
+    pinned = 1 if body.get("pinned") else 0
+    hidden = 1 if body.get("hidden") else 0
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+    conn.execute("""
+        INSERT INTO user_curation_overrides (user_id, cluster_id, pinned, hidden, updated_at)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, cluster_id) DO UPDATE SET
+            pinned = excluded.pinned,
+            hidden = excluded.hidden,
+            updated_at = excluded.updated_at
+    """, (user["id"], cluster_id, pinned, hidden, now))
+    conn.commit()
+    conn.close()
+    return {"ok": True}
+
+
 @app.get("/cp", response_class=HTMLResponse)
-async def river():
+async def river(user=Depends(require_admin)):
     return HTMLResponse(_RIVER_HTML)
 
 @app.get("/api/river/events")

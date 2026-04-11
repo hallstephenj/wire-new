@@ -304,5 +304,52 @@ def init_db():
         "UPDATE feed_sources SET name='Financial Times Markets' WHERE name='Financial Times' AND category='markets'"
     )
 
+    # Multi-tenancy: user profiles, feed subscriptions, preferences, curation overrides
+    conn.executescript("""
+    CREATE TABLE IF NOT EXISTS user_profiles (
+        id TEXT PRIMARY KEY,
+        display_name TEXT,
+        is_admin INTEGER DEFAULT 0,
+        stripe_customer_id TEXT,
+        stripe_subscription_id TEXT,
+        subscription_status TEXT DEFAULT 'free',
+        onboarding_completed INTEGER DEFAULT 0,
+        created_at TEXT,
+        updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS user_feed_subscriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT REFERENCES user_profiles(id) ON DELETE CASCADE,
+        feed_source_id INTEGER REFERENCES feed_sources(id) ON DELETE CASCADE,
+        enabled INTEGER DEFAULT 1,
+        created_at TEXT,
+        UNIQUE(user_id, feed_source_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS user_preferences (
+        user_id TEXT PRIMARY KEY REFERENCES user_profiles(id) ON DELETE CASCADE,
+        wire_name TEXT DEFAULT 'My Wire',
+        hidden_categories TEXT DEFAULT '[]',
+        category_order TEXT DEFAULT '[]',
+        show_general INTEGER DEFAULT 1,
+        default_sort TEXT DEFAULT 'hot',
+        updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS user_curation_overrides (
+        user_id TEXT REFERENCES user_profiles(id) ON DELETE CASCADE,
+        cluster_id TEXT REFERENCES story_clusters(id) ON DELETE CASCADE,
+        pinned INTEGER DEFAULT 0,
+        hidden INTEGER DEFAULT 0,
+        updated_at TEXT,
+        PRIMARY KEY (user_id, cluster_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_feed_subs_user ON user_feed_subscriptions(user_id);
+    CREATE INDEX IF NOT EXISTS idx_user_feed_subs_feed ON user_feed_subscriptions(feed_source_id);
+    CREATE INDEX IF NOT EXISTS idx_user_curation_user ON user_curation_overrides(user_id);
+    """)
+
     conn.commit()
     conn.close()

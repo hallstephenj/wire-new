@@ -1,0 +1,112 @@
+import os
+import time
+import httpx
+from jose import jwt, jwk, JWTError
+from fastapi import Request, HTTPException
+from wire.db import get_conn
+
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
+_JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+
+# In-memory JWKS cache — refreshed every hour or on kid miss
+_jwks_cache: dict = {"keys": [], "fetched_at": 0.0}
+_JWKS_TTL = 3600
+
+
+def _fetch_jwks(force: bool = False) -> list:
+    now = time.time()
+    if not force and _jwks_cache["keys"] and (now - _jwks_cache["fetched_at"]) < _JWKS_TTL:
+        return _jwks_cache["keys"]
+    resp = httpx.get(_JWKS_URL, timeout=5)
+    resp.raise_for_status()
+    keys = resp.json().get("keys", [])
+    _jwks_cache["keys"] = keys
+    _jwks_cache["fetched_at"] = now
+    return keys
+
+
+def _verify_token(token: str) -> dict:
+    """Verify a Supabase JWT using the project's JWKS endpoint (ES256)."""
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
+    alg = header.get("alg", "ES256")
+
+    keys = _fetch_jwks()
+    key_data = next((k for k in keys if k.get("kid") == kid), None)
+
+    # kid not in cache → maybe rotated, refetch once
+    if key_data is None:
+        keys = _fetch_jwks(force=True)
+        key_data = next((k for k in keys if k.get("kid") == kid), None)
+
+    if key_data is None:
+        raise JWTError(f"No matching key for kid={kid}")
+
+    public_key = jwk.construct(key_data, algorithm=alg)
+    return jwt.decode(token, public_key.to_dict(), algorithms=[alg],
+                      options={"verify_aud": False})
+
+
+def _get_token(request: Request) -> str | None:
+    # New Supabase JS v2 stores session as JSON in sb-<ref>-auth-token cookie.
+    # We also accept a plain sb-access-token cookie or Authorization header.
+    import json as _json
+    for name, value in request.cookies.items():
+        if name.endswith("-auth-token"):
+            try:
+                session = _json.loads(value)
+                if isinstance(session, dict) and session.get("access_token"):
+                    return session["access_token"]
+            except Exception:
+                pass
+    token = request.cookies.get("sb-access-token")
+    if token:
+        return token
+    auth = request.headers.get("Authorization", "")
+    if auth.startswith("Bearer "):
+        return auth[7:]
+    return None
+
+
+async def get_current_user(request: Request):
+    """Returns user profile dict or None if not logged in."""
+    token = _get_token(request)
+    if not token:
+        return None
+    try:
+        payload = _verify_token(token)
+        user_id = payload.get("sub")
+        if not user_id:
+            return None
+        conn = get_conn()
+        profile = conn.execute(
+            "SELECT * FROM user_profiles WHERE id=?", (user_id,)
+        ).fetchone()
+        conn.close()
+        if not profile:
+            return {"id": user_id, "is_admin": 0, "subscription_status": "free",
+                    "onboarding_completed": 0, "email": payload.get("email")}
+        return dict(profile)
+    except (JWTError, Exception):
+        return None
+
+
+async def require_user(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Login required")
+    return user
+
+
+async def require_admin(request: Request):
+    user = await get_current_user(request)
+    if not user or not user.get("is_admin"):
+        raise HTTPException(status_code=403, detail="Admin required")
+    return user
+
+
+async def require_pro(request: Request):
+    user = await get_current_user(request)
+    if not user or user.get("subscription_status") not in ("pro",):
+        raise HTTPException(status_code=403, detail="Pro required")
+    return user

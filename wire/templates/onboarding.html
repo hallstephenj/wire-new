@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Set Up Your Wire — EDROWIRE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" media="print" onload="this.media='all'">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a0a;
+    color: #cccccc;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 13px;
+    min-height: 100vh;
+}
+#app {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 40px 24px;
+}
+.logo { font-size: 20px; font-weight: 700; color: #ffb000; letter-spacing: 4px; margin-bottom: 40px; }
+.step { display: none; }
+.step.active { display: block; }
+.step-indicator {
+    font-size: 10px;
+    color: #444;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+h1 { font-size: 16px; font-weight: 700; color: #ccc; letter-spacing: 1px; margin-bottom: 6px; }
+.subtitle { font-size: 11px; color: #555; margin-bottom: 28px; }
+
+/* Preset cards */
+.presets {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 28px;
+}
+.preset-card {
+    border: 1px solid #2a2a2a;
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background: #111;
+}
+.preset-card:hover { border-color: #555; }
+.preset-card.selected { border-color: #ffb000; background: rgba(255,176,0,0.05); }
+.preset-card .preset-name { font-size: 13px; font-weight: 700; color: #ccc; margin-bottom: 4px; }
+.preset-card .preset-desc { font-size: 10px; color: #555; }
+.preset-card.selected .preset-name { color: #ffb000; }
+.preset-all { grid-column: 1 / -1; }
+
+/* Feed list */
+.feed-list { display: flex; flex-direction: column; gap: 6px; max-height: 360px; overflow-y: auto; margin-bottom: 24px; }
+.feed-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: #111;
+    border: 1px solid #222;
+}
+.feed-item-info { flex: 1; }
+.feed-item-name { font-size: 12px; color: #ccc; }
+.feed-item-cat { font-size: 10px; color: #555; text-transform: uppercase; letter-spacing: 1px; }
+.toggle {
+    width: 36px; height: 20px;
+    background: #222;
+    border: 1px solid #333;
+    border-radius: 10px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+    flex-shrink: 0;
+}
+.toggle.on { background: #ffb000; border-color: #ffb000; }
+.toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    background: #555;
+    border-radius: 50%;
+    transition: left 0.2s, background 0.2s;
+}
+.toggle.on::after { left: 18px; background: #0a0a0a; }
+
+/* Wire name */
+.wire-name-input {
+    width: 100%;
+    background: #111;
+    border: 1px solid #333;
+    color: #ffb000;
+    font-family: inherit;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    padding: 12px 16px;
+    outline: none;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+    transition: border-color 0.15s;
+}
+.wire-name-input:focus { border-color: #ffb000; }
+
+/* Step 4 */
+.live-count { font-size: 36px; font-weight: 700; color: #ffb000; margin: 24px 0 8px; }
+.pro-callout {
+    border: 1px solid #333;
+    padding: 16px;
+    margin: 24px 0;
+    background: #111;
+}
+.pro-callout .pro-badge {
+    font-size: 10px;
+    color: #ffb000;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+.pro-callout p { font-size: 11px; color: #666; line-height: 1.6; }
+
+/* Buttons */
+.btn {
+    background: #ffb000;
+    color: #0a0a0a;
+    border: none;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 28px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-outline {
+    background: transparent;
+    color: #666;
+    border: 1px solid #333;
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 12px 28px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.btn-outline:hover { color: #ccc; border-color: #555; }
+.btn-actions { display: flex; gap: 12px; align-items: center; }
+.skip-link { font-size: 11px; color: #444; cursor: pointer; }
+.skip-link:hover { color: #666; }
+@keyframes blink { 50% { opacity: 0; } }
+</style>
+</head>
+<body>
+<div id="app">
+    <div class="logo">EDROWIRE<span style="animation:blink 1s step-end infinite;">▌</span></div>
+
+    <!-- Step 1: Pick preset -->
+    <div class="step active" id="step-1">
+        <div class="step-indicator">STEP 1 OF 4</div>
+        <h1>WHAT'S YOUR WIRE?</h1>
+        <div class="subtitle">Choose the news that matters to you. You can fine-tune later.</div>
+        <div class="presets">
+            <div class="preset-card" data-preset="tech" onclick="selectPreset(this)">
+                <div class="preset-name">TECH</div>
+                <div class="preset-desc">Technology, startups, AI</div>
+            </div>
+            <div class="preset-card" data-preset="finance" onclick="selectPreset(this)">
+                <div class="preset-name">FINANCE</div>
+                <div class="preset-desc">Markets, economy, business</div>
+            </div>
+            <div class="preset-card" data-preset="politics" onclick="selectPreset(this)">
+                <div class="preset-name">POLITICS</div>
+                <div class="preset-desc">Government, policy, elections</div>
+            </div>
+            <div class="preset-card" data-preset="world" onclick="selectPreset(this)">
+                <div class="preset-name">WORLD</div>
+                <div class="preset-desc">International news</div>
+            </div>
+            <div class="preset-card preset-all" data-preset="all" onclick="selectPreset(this)">
+                <div class="preset-name">EVERYTHING</div>
+                <div class="preset-desc">All categories — full signal</div>
+            </div>
+        </div>
+        <div class="btn-actions">
+            <button class="btn" id="preset-next-btn" onclick="applyPreset()" disabled>NEXT →</button>
+        </div>
+    </div>
+
+    <!-- Step 2: Fine-tune feeds -->
+    <div class="step" id="step-2">
+        <div class="step-indicator">STEP 2 OF 4</div>
+        <h1>FINE-TUNE YOUR FEEDS</h1>
+        <div class="subtitle">Toggle specific sources on or off.</div>
+        <div class="feed-list" id="feed-list"></div>
+        <div class="btn-actions">
+            <button class="btn" onclick="goStep(3)">NEXT →</button>
+        </div>
+    </div>
+
+    <!-- Step 3: Name your wire -->
+    <div class="step" id="step-3">
+        <div class="step-indicator">STEP 3 OF 4</div>
+        <h1>NAME YOUR WIRE</h1>
+        <div class="subtitle">Give your wire a name. Only you see it.</div>
+        <input type="text" class="wire-name-input" id="wire-name" value="MY WIRE" maxlength="32" spellcheck="false">
+        <div class="btn-actions">
+            <button class="btn" onclick="saveName()">NEXT →</button>
+        </div>
+    </div>
+
+    <!-- Step 4: You're live -->
+    <div class="step" id="step-4">
+        <div class="step-indicator">STEP 4 OF 4</div>
+        <h1>YOUR WIRE IS LIVE</h1>
+        <div class="subtitle">Personalized news from your selected sources.</div>
+        <div class="live-count" id="live-count">—</div>
+        <div style="font-size:11px;color:#555;margin-bottom:16px;">stories in your feed right now</div>
+        <div class="pro-callout">
+            <div class="pro-badge">⚡ PRO</div>
+            <p>Add custom RSS feeds, reorder categories, and unlock advanced curation.<br>$15/month. Cancel anytime.</p>
+        </div>
+        <div class="btn-actions">
+            <button class="btn" onclick="finish()">ENTER MY WIRE</button>
+            <button class="btn-outline" onclick="upgradeNow()">UPGRADE TO PRO</button>
+        </div>
+    </div>
+</div>
+
+<script>
+let selectedPreset = null;
+
+function selectPreset(card) {
+    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedPreset = card.dataset.preset;
+    document.getElementById('preset-next-btn').disabled = false;
+}
+
+async function applyPreset() {
+    if (!selectedPreset) return;
+    const btn = document.getElementById('preset-next-btn');
+    btn.disabled = true;
+    btn.textContent = 'LOADING...';
+    try {
+        await fetch('/api/user/onboarding/preset', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ preset: selectedPreset }),
+        });
+        await loadFeeds();
+        goStep(2);
+    } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'NEXT →';
+    }
+}
+
+async function loadFeeds() {
+    const res = await fetch('/api/user/feeds');
+    const data = await res.json();
+    const list = document.getElementById('feed-list');
+    list.innerHTML = '';
+    for (const feed of data.feeds) {
+        const on = feed.subscribed === 1;
+        const div = document.createElement('div');
+        div.className = 'feed-item';
+        div.innerHTML = `
+            <div class="feed-item-info">
+                <div class="feed-item-name">${escHtml(feed.name)}</div>
+                <div class="feed-item-cat">${escHtml(feed.category)}</div>
+            </div>
+            <div class="toggle ${on ? 'on' : ''}" data-feed-id="${feed.id}" onclick="toggleFeed(this, ${feed.id})"></div>
+        `;
+        list.appendChild(div);
+    }
+}
+
+async function toggleFeed(el, feedId) {
+    const on = el.classList.contains('on');
+    el.classList.toggle('on');
+    await fetch(`/api/user/feeds/${feedId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !on }),
+    });
+}
+
+async function saveName() {
+    const name = document.getElementById('wire-name').value.trim() || 'My Wire';
+    await fetch('/api/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wire_name: name }),
+    });
+    await loadLiveCount();
+    goStep(4);
+}
+
+async function loadLiveCount() {
+    try {
+        const res = await fetch('/api/stories?limit=1');
+        const data = await res.json();
+        document.getElementById('live-count').textContent = data.total || '0';
+    } catch (e) {}
+}
+
+async function finish() {
+    await fetch('/api/user/onboarding/complete', { method: 'POST' });
+    window.location.href = '/';
+}
+
+function upgradeNow() {
+    finish().then(() => {
+        document.querySelector('form[action="/billing/checkout"]')?.submit();
+    });
+    // Fallback: navigate to settings after completing onboarding
+    fetch('/api/user/onboarding/complete', { method: 'POST' }).then(() => {
+        window.location.href = '/settings#billing';
+    });
+}
+
+function goStep(n) {
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.getElementById('step-' + n).classList.add('active');
+    window.scrollTo(0, 0);
+}
+
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

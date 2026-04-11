@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings — EDROWIRE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" media="print" onload="this.media='all'">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    background: #0a0a0a;
+    color: #cccccc;
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 13px;
+}
+#app { max-width: 700px; margin: 0 auto; padding: 32px 24px 80px; }
+header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; padding-bottom: 12px; border-bottom: 1px solid #222; }
+.logo { font-size: 20px; font-weight: 700; color: #ffb000; letter-spacing: 4px; }
+.back-link { font-size: 11px; color: #555; text-decoration: none; letter-spacing: 1px; }
+.back-link:hover { color: #ccc; }
+
+h2 { font-size: 11px; color: #ffb000; letter-spacing: 2px; text-transform: uppercase; margin: 28px 0 16px; border-bottom: 1px solid #1a1a1a; padding-bottom: 8px; }
+.field { margin-bottom: 16px; }
+label { display: block; font-size: 10px; color: #555; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 6px; }
+input[type="text"] {
+    background: #111; border: 1px solid #333; color: #ccc;
+    font-family: inherit; font-size: 13px; padding: 8px 12px; outline: none; width: 300px;
+    transition: border-color 0.15s;
+}
+input[type="text"]:focus { border-color: #ffb000; }
+.static-value { color: #555; font-size: 12px; }
+.btn {
+    background: #ffb000; color: #0a0a0a; border: none;
+    font-family: inherit; font-size: 11px; font-weight: 700; letter-spacing: 2px;
+    text-transform: uppercase; padding: 8px 20px; cursor: pointer; transition: opacity 0.15s;
+}
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-outline {
+    background: transparent; color: #666; border: 1px solid #333;
+    font-family: inherit; font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    padding: 8px 20px; cursor: pointer; transition: all 0.15s;
+}
+.btn-outline:hover { color: #ccc; border-color: #555; }
+.btn-danger {
+    background: transparent; color: #e05555; border: 1px solid #e05555;
+    font-family: inherit; font-size: 11px; letter-spacing: 2px; text-transform: uppercase;
+    padding: 8px 20px; cursor: pointer; transition: all 0.15s;
+}
+.btn-danger:hover { background: rgba(224,85,85,0.1); }
+
+/* Plan badge */
+.plan-badge {
+    display: inline-block; padding: 3px 10px; font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    border: 1px solid #333; color: #666; margin-left: 12px;
+}
+.plan-badge.pro { color: #ffb000; border-color: #ffb000; background: rgba(255,176,0,0.05); }
+.plan-row { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+
+/* Feed list */
+.feed-search { background: #111; border: 1px solid #333; color: #ccc; font-family: inherit; font-size: 12px; padding: 8px 12px; outline: none; width: 100%; margin-bottom: 12px; }
+.feed-search:focus { border-color: #ffb000; }
+.feed-list { display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.feed-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: #111; border: 1px solid #1a1a1a; }
+.feed-item-info { flex: 1; }
+.feed-item-name { font-size: 12px; color: #ccc; }
+.feed-item-cat { font-size: 10px; color: #444; text-transform: uppercase; letter-spacing: 1px; }
+.toggle { width: 36px; height: 20px; background: #222; border: 1px solid #333; border-radius: 10px; position: relative; cursor: pointer; transition: background 0.2s; flex-shrink: 0; }
+.toggle.on { background: #ffb000; border-color: #ffb000; }
+.toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: #555; border-radius: 50%; transition: left 0.2s, background 0.2s; }
+.toggle.on::after { left: 18px; background: #0a0a0a; }
+.pro-gate { display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: 11px; color: #555; }
+.pro-gate-badge { font-size: 9px; color: #ffb000; border: 1px solid #ffb000; padding: 2px 6px; letter-spacing: 1px; }
+
+/* Category pills */
+.cat-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.cat-pill {
+    padding: 4px 14px; border: 1px solid #333; cursor: pointer;
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #666;
+    transition: all 0.15s;
+}
+.cat-pill:hover { color: #ccc; border-color: #555; }
+.cat-pill.hidden-cat { color: #333; border-color: #222; text-decoration: line-through; }
+
+.save-toast { position: fixed; bottom: 24px; right: 24px; background: #4a9e4a; color: #fff; padding: 8px 16px; font-size: 11px; letter-spacing: 1px; opacity: 0; transition: opacity 0.3s; pointer-events: none; }
+.save-toast.show { opacity: 1; }
+
+@keyframes blink { 50% { opacity: 0; } }
+
+.custom-feed-row { display: flex; gap: 8px; margin-top: 12px; }
+.custom-feed-row input { flex: 1; }
+</style>
+</head>
+<body>
+<div id="app">
+    <header>
+        <div class="logo">EDROWIRE<span style="animation:blink 1s step-end infinite;">▌</span></div>
+        <a href="/" class="back-link">← BACK TO WIRE</a>
+    </header>
+
+    <!-- Profile -->
+    <h2>Profile</h2>
+    <div class="field">
+        <label>Wire Name</label>
+        <input type="text" id="wire-name" value="" maxlength="32" spellcheck="false">
+    </div>
+    <div class="field">
+        <label>Email</label>
+        <div class="static-value" id="user-email">—</div>
+    </div>
+    <button class="btn" onclick="saveProfile()">SAVE</button>
+
+    <!-- Feeds -->
+    <h2>Feeds</h2>
+    <input type="text" class="feed-search" placeholder="Search feeds..." oninput="filterFeeds(this.value)">
+    <div class="feed-list" id="feed-list"></div>
+    <div class="pro-gate" id="custom-feed-section">
+        <span class="pro-gate-badge">PRO</span>
+        <span>Add custom RSS feed</span>
+    </div>
+    <div class="custom-feed-row" id="custom-feed-row" style="display:none;">
+        <input type="text" id="custom-feed-url" placeholder="https://example.com/feed.rss">
+        <button class="btn" onclick="addCustomFeed()">ADD</button>
+    </div>
+
+    <!-- Categories -->
+    <h2>Categories</h2>
+    <div style="font-size:11px;color:#555;margin-bottom:12px;">Click to hide/show a category tab.</div>
+    <div class="cat-list" id="cat-list"></div>
+    <button class="btn" onclick="saveCategories()">SAVE CATEGORIES</button>
+
+    <!-- Plan -->
+    <h2 id="billing">Plan</h2>
+    <div class="plan-row">
+        <span id="plan-label" style="font-size:13px;color:#ccc;">Free</span>
+        <span class="plan-badge" id="plan-badge">FREE</span>
+    </div>
+    <div id="billing-actions"></div>
+</div>
+
+<div class="save-toast" id="save-toast">SAVED</div>
+
+<script>
+let allFeeds = [];
+let hiddenCats = [];
+const ALL_CATS = ['tech', 'markets', 'politics', 'world', 'general'];
+
+async function init() {
+    // Load user data
+    const [meRes, feedsRes] = await Promise.all([
+        fetch('/api/user/me'),
+        fetch('/api/user/feeds'),
+    ]);
+    const me = await meRes.json();
+    const feedsData = await feedsRes.json();
+    allFeeds = feedsData.feeds;
+
+    // Populate profile
+    document.getElementById('wire-name').value = me.preferences?.wire_name || 'My Wire';
+    document.getElementById('user-email').textContent = me.email || '—';
+
+    // Parse hidden categories
+    try { hiddenCats = JSON.parse(me.preferences?.hidden_categories || '[]'); } catch (e) { hiddenCats = []; }
+
+    renderFeeds(allFeeds);
+    renderCategories();
+    renderBilling(me);
+
+    // Show custom feed input if Pro
+    if (me.subscription_status === 'pro') {
+        document.getElementById('custom-feed-section').style.display = 'none';
+        document.getElementById('custom-feed-row').style.display = 'flex';
+    }
+
+    // Handle ?upgraded=1 toast
+    if (new URLSearchParams(location.search).get('upgraded') === '1') {
+        showToast('UPGRADED TO PRO!');
+        history.replaceState({}, '', '/settings');
+    }
+}
+
+function renderFeeds(feeds) {
+    const list = document.getElementById('feed-list');
+    list.innerHTML = '';
+    for (const feed of feeds) {
+        const on = feed.subscribed === 1;
+        const div = document.createElement('div');
+        div.className = 'feed-item';
+        div.innerHTML = `
+            <div class="feed-item-info">
+                <div class="feed-item-name">${escHtml(feed.name)}</div>
+                <div class="feed-item-cat">${escHtml(feed.category)}</div>
+            </div>
+            <div class="toggle ${on ? 'on' : ''}" onclick="toggleFeed(this, ${feed.id})"></div>
+        `;
+        list.appendChild(div);
+    }
+}
+
+function filterFeeds(q) {
+    const lower = q.toLowerCase();
+    const filtered = allFeeds.filter(f =>
+        f.name.toLowerCase().includes(lower) || f.category.toLowerCase().includes(lower)
+    );
+    renderFeeds(filtered);
+}
+
+async function toggleFeed(el, feedId) {
+    const on = el.classList.contains('on');
+    el.classList.toggle('on');
+    const feed = allFeeds.find(f => f.id === feedId);
+    if (feed) feed.subscribed = on ? 0 : 1;
+    await fetch(`/api/user/feeds/${feedId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: !on }),
+    });
+}
+
+async function addCustomFeed() {
+    const url = document.getElementById('custom-feed-url').value.trim();
+    if (!url) return;
+    await fetch('/api/user/feeds/custom', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+    });
+    document.getElementById('custom-feed-url').value = '';
+    const feedsRes = await fetch('/api/user/feeds');
+    const feedsData = await feedsRes.json();
+    allFeeds = feedsData.feeds;
+    renderFeeds(allFeeds);
+    showToast('FEED ADDED');
+}
+
+function renderCategories() {
+    const list = document.getElementById('cat-list');
+    list.innerHTML = '';
+    for (const cat of ALL_CATS) {
+        const pill = document.createElement('div');
+        pill.className = 'cat-pill' + (hiddenCats.includes(cat) ? ' hidden-cat' : '');
+        pill.textContent = cat.toUpperCase();
+        pill.onclick = () => {
+            if (hiddenCats.includes(cat)) {
+                hiddenCats = hiddenCats.filter(c => c !== cat);
+            } else {
+                hiddenCats.push(cat);
+            }
+            pill.classList.toggle('hidden-cat');
+        };
+        list.appendChild(pill);
+    }
+}
+
+async function saveCategories() {
+    await fetch('/api/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hidden_categories: JSON.stringify(hiddenCats) }),
+    });
+    showToast('SAVED');
+}
+
+async function saveProfile() {
+    const name = document.getElementById('wire-name').value.trim();
+    await fetch('/api/user/preferences', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wire_name: name }),
+    });
+    showToast('SAVED');
+}
+
+function renderBilling(me) {
+    const isPro = me.subscription_status === 'pro';
+    document.getElementById('plan-label').textContent = isPro ? 'Pro' : 'Free';
+    const badge = document.getElementById('plan-badge');
+    badge.textContent = isPro ? 'PRO' : 'FREE';
+    if (isPro) badge.classList.add('pro');
+
+    const actions = document.getElementById('billing-actions');
+    if (isPro) {
+        actions.innerHTML = `
+            <form method="POST" action="/billing/portal" style="display:inline;">
+                <button type="submit" class="btn-outline">MANAGE SUBSCRIPTION</button>
+            </form>`;
+    } else {
+        actions.innerHTML = `
+            <p style="font-size:11px;color:#555;margin-bottom:12px;">
+                Upgrade to Pro for custom feeds, advanced curation, and priority support. $15/month.
+            </p>
+            <form method="POST" action="/billing/checkout" style="display:inline;">
+                <button type="submit" class="btn">UPGRADE TO PRO</button>
+            </form>`;
+    }
+}
+
+function showToast(msg) {
+    const t = document.getElementById('save-toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+function escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+init();
+</script>
+</body>
+</html>
