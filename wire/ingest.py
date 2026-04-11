@@ -401,8 +401,23 @@ async def _poll_single_feed(url: str, name: str, category: str) -> int:
 
         item_id = str(uuid.uuid4())
         published = parse_published(entry)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(timezone.utc)
 
+        # Reject articles older than the lookback window — stale articles
+        # create zombie clusters and corrupt rewrite headlines.
+        if published:
+            try:
+                pub_dt = datetime.fromisoformat(published.replace("Z", "+00:00"))
+                if pub_dt.tzinfo is None:
+                    pub_dt = pub_dt.replace(tzinfo=timezone.utc)
+                age_hours = (now - pub_dt).total_seconds() / 3600
+                lookback = cfg.get("clustering", {}).get("lookback_hours", 72)
+                if age_hours > lookback:
+                    continue
+            except Exception:
+                pass
+
+        now = now.isoformat()
         cluster_id = assign_cluster(conn, title, link, item_name, category, published_at=published)
 
         conn.execute(

@@ -931,6 +931,41 @@ a:hover { text-decoration: underline; }
     margin-top: 2px;
 }
 
+.job-name-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+
+.job-name-row .job-name {
+    margin-bottom: 0;
+}
+
+.job-run-btn {
+    font-family: inherit;
+    font-size: 8px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #666;
+    background: none;
+    border: 1px solid #333;
+    padding: 2px 5px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+}
+
+.job-run-btn:hover {
+    color: #ffb000;
+    border-color: #ffb000;
+}
+
+.job-run-btn:disabled {
+    color: #444;
+    border-color: #222;
+    cursor: default;
+}
+
 /* ── Stats ───────────────────────────────────────────────────────── */
 .stat-row {
     display: flex;
@@ -1437,32 +1472,32 @@ a:hover { text-decoration: underline; }
                 <div class="panel-header">PROCESSES</div>
                 <div class="panel-body">
                     <div class="job-card" id="job-rss">
-                        <div class="job-name">RSS</div>
+                        <div class="job-name-row"><div class="job-name">RSS</div><button class="job-run-btn" onclick="runJob('rss', this)">RUN</button></div>
                         <div class="job-field">next: <span id="rss-next">--</span></div>
                         <div class="job-countdown" id="rss-countdown">--:--</div>
                     </div>
                     <div class="job-card" id="job-search">
-                        <div class="job-name">SEARCH</div>
+                        <div class="job-name-row"><div class="job-name">SEARCH</div><button class="job-run-btn" onclick="runJob('search', this)">RUN</button></div>
                         <div class="job-field">next: <span id="search-next">--</span></div>
                         <div class="job-countdown" id="search-countdown">--:--</div>
                     </div>
                     <div class="job-card" id="job-rewrite">
-                        <div class="job-name">REWRITE</div>
+                        <div class="job-name-row"><div class="job-name">REWRITE</div><button class="job-run-btn" onclick="runJob('rewrite', this)">RUN</button></div>
                         <div class="job-field">next: <span id="rewrite-next">--</span></div>
                         <div class="job-countdown" id="rewrite-countdown">--:--</div>
                     </div>
                     <div class="job-card" id="job-cleanup">
-                        <div class="job-name">CLEANUP</div>
+                        <div class="job-name-row"><div class="job-name">CLEANUP</div><button class="job-run-btn" onclick="runJob('cleanup', this)">RUN</button></div>
                         <div class="job-field">next: <span id="cleanup-next">--</span></div>
                         <div class="job-countdown" id="cleanup-countdown">--:--</div>
                     </div>
                     <div class="job-card" id="job-reference_check">
-                        <div class="job-name">REF CHECK</div>
+                        <div class="job-name-row"><div class="job-name">REF CHECK</div><button class="job-run-btn" onclick="runJob('reference_check', this)">RUN</button></div>
                         <div class="job-field">next: <span id="reference_check-next">--</span></div>
                         <div class="job-countdown" id="reference_check-countdown">--:--</div>
                     </div>
                     <div class="job-card" id="job-dedup">
-                        <div class="job-name">DEDUP</div>
+                        <div class="job-name-row"><div class="job-name">DEDUP</div><button class="job-run-btn" onclick="runJob('dedup', this)">RUN</button></div>
                         <div class="job-field">next: <span id="dedup-next">--</span></div>
                         <div class="job-countdown" id="dedup-countdown">--:--</div>
                     </div>
@@ -1660,6 +1695,7 @@ function eventMsg(ev) {
         case 'cluster_hit': return `merged "${trunc(ev.headline, 40)}"`;
         case 'cluster_new': return `new: "${trunc(ev.headline, 40)}"`;
         case 'rewrite': return `"${trunc(ev.after, 50)}"`;
+        case 'dedup_merge': return `[${ev.method}] "${trunc(ev.winner, 35)}" ← "${trunc(ev.loser, 35)}" (${ev.similarity})`;
         case 'error': return `[${ev.source}] ${ev.message}`;
         default: return JSON.stringify(ev);
     }
@@ -1750,13 +1786,14 @@ function renderStories(stories, total) {
 
         // Expanded view: items with swap-primary buttons
         const itemsHtml = s.items.map(item => `
-            <div class="item-row">
+            <div class="item-row" id="item-row-${esc(item.id)}">
                 <label>
                     <input type="checkbox" class="item-check" value="${esc(item.id)}" data-cluster="${esc(s.id)}">
                     <span class="item-source">${esc(item.source)}</span>
                     ${esc(trunc(item.headline, 60))}
                 </label>
                 <button class="swap-btn" onclick="swapPrimary('${esc(s.id)}', '${esc(item.url)}')" title="Make primary link">SWAP</button>
+                <button class="swap-btn" style="color:#c0392b;border-color:#c0392b;" onclick="deleteItem('${esc(item.id)}', '${esc(s.id)}')" title="Remove article from DB">DEL</button>
             </div>
         `).join('');
 
@@ -1790,6 +1827,7 @@ function renderStories(stories, total) {
                     <button class="cur-btn ${s.note ? 'note-active' : ''}" onclick="promptNote('${esc(s.id)}', this)" title="Editorial note">&#9998; NOTE</button>
                     <button class="cur-btn" onclick="promptExpiry('${esc(s.id)}')" title="Override expiry">&#9201; EXPIRY</button>
                     <button class="cur-btn" onclick="toggleExpand('${esc(s.id)}')" title="Expand items">&#9776; EXPAND</button>
+                    <button class="cur-btn" onclick="forceRewrite('${esc(s.id)}', this)" title="Force AI rewrite now">&#8635; REWRITE</button>
                 </div>
                 <div class="story-expanded" id="expand-${s.id}">
                     ${noteDisplay}
@@ -1917,6 +1955,36 @@ async function swapPrimary(clusterId, sourceUrl) {
     await apiPost('swap-primary', { cluster_id: clusterId, source_url: sourceUrl });
     fetchStories();
     fetchCurationLog();
+}
+
+async function deleteItem(itemId, clusterId) {
+    if (!confirm('Remove this article from the database?')) return;
+    const resp = await fetch(`/api/river/items/${itemId}`, { method: 'DELETE' });
+    if (resp.ok) {
+        const row = document.getElementById(`item-row-${itemId}`);
+        if (row) row.remove();
+        fetchStories();
+    } else {
+        alert('Delete failed');
+    }
+}
+
+async function forceRewrite(clusterId, btn) {
+    btn.disabled = true;
+    btn.textContent = '⟳ REWRITING...';
+    try {
+        const resp = await fetch(`/api/river/clusters/${clusterId}/rewrite`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.ok && data.headline) {
+            btn.textContent = '⟳ DONE';
+            fetchStories();
+        } else {
+            btn.textContent = '⟳ FAILED';
+        }
+    } catch (e) {
+        btn.textContent = '⟳ ERROR';
+    }
+    setTimeout(() => { btn.disabled = false; btn.textContent = '⟳ REWRITE'; }, 3000);
 }
 
 function showFlagMenu(el, clusterId) {
@@ -2212,6 +2280,23 @@ async function doRecluster() {
 }
 
 // ── Backfill / Reboot ────────────────────────────────────────────────
+async function runJob(jobId, btn) {
+    btn.disabled = true;
+    btn.textContent = '...';
+    try {
+        const resp = await fetch(`/api/river/jobs/${jobId}/run`, { method: 'POST' });
+        const data = await resp.json();
+        if (resp.status === 409) {
+            btn.textContent = 'BUSY';
+        } else {
+            btn.textContent = 'OK';
+        }
+    } catch (e) {
+        btn.textContent = 'ERR';
+    }
+    setTimeout(() => { btn.disabled = false; btn.textContent = 'RUN'; }, 3000);
+}
+
 async function triggerBackfill() {
     const btn = document.getElementById('backfill-btn');
     btn.disabled = true;

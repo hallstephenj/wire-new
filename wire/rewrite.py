@@ -145,7 +145,11 @@ async def _rewrite_chunk(client, model, clusters, timeout=_API_TIMEOUT):
                     lambda: client.messages.create(
                         model=model,
                         max_tokens=4000,
-                        system=SYSTEM_PROMPT,
+                        system=[{
+                            "type": "text",
+                            "text": SYSTEM_PROMPT,
+                            "cache_control": {"type": "ephemeral"},
+                        }],
                         messages=[{"role": "user", "content": prompt}],
                         timeout=timeout,
                     )
@@ -176,12 +180,19 @@ async def _rewrite_chunk(client, model, clusters, timeout=_API_TIMEOUT):
 
 
 def _fetch_clusters_for_rewrite(conn, now, limit):
-    """Query pending clusters and gather their headlines. Returns list of cluster dicts."""
+    """Query pending clusters and gather their headlines. Returns list of cluster dicts.
+
+    Only rewrites clusters updated in the last 24h — older clusters near expiry
+    aren't worth the API cost and will be cleaned up by the next cleanup pass.
+    """
+    from datetime import datetime, timezone, timedelta
+    cutoff_24h = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     rows = conn.execute("""
         SELECT sc.id, sc.rewritten_headline, sc.source_count
         FROM story_clusters sc
         LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
         WHERE sc.expires_at > ?
+        AND sc.last_updated > ?
         AND (sc.source_count >= 2 OR (COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL))
         AND (co.locked IS NULL OR co.locked = 0)
         AND EXISTS (
@@ -192,7 +203,7 @@ def _fetch_clusters_for_rewrite(conn, now, limit):
         ORDER BY CASE WHEN COALESCE(co.boost, 0) > 0 AND co.scoop_boosted_at IS NOT NULL THEN 0 ELSE 1 END,
                  sc.source_count DESC, sc.last_updated DESC
         LIMIT ?
-    """, (now, limit)).fetchall()
+    """, (now, cutoff_24h, limit)).fetchall()
 
     if not rows:
         return []
@@ -201,7 +212,7 @@ def _fetch_clusters_for_rewrite(conn, now, limit):
     cluster_ids = [r["id"] for r in rows]
     ph = ",".join("?" for _ in cluster_ids)
     all_items = conn.execute(
-        f"SELECT cluster_id, original_headline, source_name FROM raw_items WHERE cluster_id IN ({ph}) ORDER BY published_at ASC",
+        f"SELECT cluster_id, original_headline, source_name FROM raw_items WHERE cluster_id IN ({ph}) ORDER BY published_at DESC",
         cluster_ids
     ).fetchall()
 
@@ -349,7 +360,7 @@ async def urgent_rewrite():
     cluster_ids = [r["id"] for r in rows]
     ph = ",".join("?" for _ in cluster_ids)
     all_items = conn.execute(
-        f"SELECT cluster_id, original_headline, source_name FROM raw_items WHERE cluster_id IN ({ph}) ORDER BY published_at ASC",
+        f"SELECT cluster_id, original_headline, source_name FROM raw_items WHERE cluster_id IN ({ph}) ORDER BY published_at DESC",
         cluster_ids
     ).fetchall()
 

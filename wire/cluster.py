@@ -334,7 +334,7 @@ def assign_cluster(conn, headline: str, url: str, source_name: str, category: st
         # Only runs when embeddings are pre-computed (cache survived a full
         # TTL cycle without invalidation).  During rapid ingestion this pass
         # is skipped; merge_existing_clusters catches stragglers afterward.
-        embed_threshold = algo.get("embed_threshold", 0.72)
+        embed_threshold = algo.get("embed_threshold", 0.65)
         cached_embeddings = cache.get("embeddings")
         if cached_embeddings is not None:
             try:
@@ -435,7 +435,7 @@ def _add_to_cluster(conn, cluster_id: str, source_name: str, url: str, headline:
 
     if get_total_score(source_name) > get_total_score(current["primary_source"]):
         relevance = _headline_relevance(headline, current["rewritten_headline"] or "")
-        if relevance >= 0.15:
+        if relevance >= 0.08:
             updates["primary_url"] = url
             updates["primary_source"] = source_name
 
@@ -488,6 +488,7 @@ def _do_merge(conn, rows, i, j, now, merged):
             conn.execute("UPDATE raw_items SET cluster_id=NULL WHERE id=?", (item["id"],))
 
     conn.execute("DELETE FROM cluster_sources WHERE cluster_id=?", (loser_id,))
+    conn.execute("DELETE FROM curation_overrides WHERE cluster_id=?", (loser_id,))
     new_count = conn.execute(
         "SELECT COUNT(DISTINCT source_name) as c FROM cluster_sources WHERE cluster_id=?",
         (winner_id,)
@@ -552,6 +553,7 @@ def merge_existing_clusters(conn):
                 continue
             if sim_matrix[i, j] >= merge_tfidf:
                 log.info(f"TF-IDF merge: '{headlines[i][:60]}' ← '{headlines[j][:60]}' (sim={sim_matrix[i, j]:.3f})")
+                ev("dedup_merge", winner=headlines[i][:80], loser=headlines[j][:80], similarity=round(float(sim_matrix[i, j]), 3), method="tfidf")
                 _do_merge(conn, rows, i, j, now, merged)
                 merge_count += 1
 
@@ -569,9 +571,13 @@ def merge_existing_clusters(conn):
         log.info(f"Merged {merge_count} duplicate clusters (TF-IDF only)")
         return merge_count
 
+    # Limit embedding pass to clusters updated in the last 48h — duplicates
+    # only form from fresh ingestion, and comparing all 7k+ clusters produces
+    # a ~200MB similarity matrix that never completes on modest hardware.
+    embed_cutoff = (now - timedelta(hours=24)).isoformat()
     rows2 = conn.execute(
-        "SELECT id, rewritten_headline, source_count FROM story_clusters WHERE expires_at > ? ORDER BY source_count DESC",
-        (now.isoformat(),)
+        "SELECT id, rewritten_headline, source_count FROM story_clusters WHERE expires_at > ? AND last_updated > ? ORDER BY source_count DESC",
+        (now.isoformat(), embed_cutoff)
     ).fetchall()
 
     if len(rows2) < 2:
@@ -583,7 +589,7 @@ def merge_existing_clusters(conn):
 
     headlines2 = [r["rewritten_headline"] or "" for r in rows2]
 
-    EMBED_THRESHOLD = 0.75  # semantic similarity threshold for merge
+    EMBED_THRESHOLD = 0.65  # semantic similarity threshold for merge
 
     try:
         model = _get_embed_model()
@@ -608,6 +614,7 @@ def merge_existing_clusters(conn):
                 continue
             if embed_sim[i, j] >= EMBED_THRESHOLD:
                 log.info(f"Embedding merge: '{headlines2[i][:60]}' ← '{headlines2[j][:60]}' (sim={embed_sim[i, j]:.3f})")
+                ev("dedup_merge", winner=headlines2[i][:80], loser=headlines2[j][:80], similarity=round(float(embed_sim[i, j]), 3), method="embedding")
                 _do_merge(conn, rows2, i, j, now, merged2)
                 merge_count += 1
 

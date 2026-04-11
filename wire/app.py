@@ -178,7 +178,7 @@ async def _start_scheduler_after_boot():
         scheduler = AsyncIOScheduler()
     scheduler.add_job(poll_feeds, "interval", minutes=cfg["polling"]["rss_interval_minutes"], id="rss", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(search_sweep, "interval", minutes=cfg["polling"]["search_interval_minutes"], id="search", next_run_time=datetime.now(timezone.utc))
-    scheduler.add_job(rewrite_pending, "interval", minutes=2, id="rewrite", next_run_time=datetime.now(timezone.utc))
+    scheduler.add_job(rewrite_pending, "interval", minutes=15, id="rewrite", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(cleanup_expired, "interval", hours=cfg["polling"]["cleanup_interval_hours"], id="cleanup")
     scheduler.add_job(run_reference_check, "cron", hour=6, id="reference_check")
     scheduler.add_job(deduplicate_clusters, "interval", minutes=30, id="dedup")
@@ -1132,6 +1132,99 @@ async def river_stories(
     return {"stories": stories, "total": total}
 
 
+@app.delete("/api/river/items/{item_id}")
+async def delete_item(item_id: str):
+    """Remove a single raw article from the DB and update its cluster's source count."""
+    conn = get_conn()
+    item = conn.execute("SELECT cluster_id, source_name FROM raw_items WHERE id=?", (item_id,)).fetchone()
+    if not item:
+        conn.close()
+        return JSONResponse({"error": "item not found"}, status_code=404)
+
+    cluster_id = item["cluster_id"]
+    source_name = item["source_name"]
+
+    conn.execute("DELETE FROM raw_items WHERE id=?", (item_id,))
+
+    if cluster_id:
+        # Remove source entry if no other items from this source remain
+        remaining = conn.execute(
+            "SELECT 1 FROM raw_items WHERE cluster_id=? AND source_name=?", (cluster_id, source_name)
+        ).fetchone()
+        if not remaining:
+            conn.execute("DELETE FROM cluster_sources WHERE cluster_id=? AND source_name=?", (cluster_id, source_name))
+
+        # If cluster is now empty, delete it; otherwise update source count
+        any_left = conn.execute("SELECT 1 FROM raw_items WHERE cluster_id=?", (cluster_id,)).fetchone()
+        if not any_left:
+            conn.execute("DELETE FROM curation_overrides WHERE cluster_id=?", (cluster_id,))
+            conn.execute("DELETE FROM cluster_sources WHERE cluster_id=?", (cluster_id,))
+            conn.execute("DELETE FROM story_clusters WHERE id=?", (cluster_id,))
+        else:
+            new_count = conn.execute(
+                "SELECT COUNT(DISTINCT source_name) as c FROM cluster_sources WHERE cluster_id=?", (cluster_id,)
+            ).fetchone()["c"]
+            now = datetime.now(timezone.utc).isoformat()
+            conn.execute("UPDATE story_clusters SET source_count=?, last_updated=? WHERE id=?", (max(new_count, 1), now, cluster_id))
+
+    conn.commit()
+    conn.close()
+    return {"status": "ok", "cluster_id": cluster_id}
+
+
+@app.post("/api/river/clusters/{cluster_id}/rewrite")
+async def force_rewrite_cluster(cluster_id: str):
+    """Force an immediate AI rewrite of a specific cluster."""
+    import os
+    import anthropic as _anthropic
+    from wire.rewrite import _rewrite_chunk, _parse_rewrite_response, _fetch_clusters_for_rewrite
+    from wire.config import load_config as _load_config
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return JSONResponse({"error": "no API key"}, status_code=500)
+
+    conn = get_conn()
+    now = datetime.now(timezone.utc).isoformat()
+
+    # Fetch this specific cluster regardless of source_count threshold
+    row = conn.execute(
+        "SELECT sc.id, sc.rewritten_headline, sc.source_count FROM story_clusters sc WHERE sc.id=? AND sc.expires_at > ?",
+        (cluster_id, now)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return JSONResponse({"error": "cluster not found or expired"}, status_code=404)
+
+    items = conn.execute(
+        "SELECT original_headline, source_name FROM raw_items WHERE cluster_id=? ORDER BY published_at DESC",
+        (cluster_id,)
+    ).fetchall()
+    if not items:
+        conn.close()
+        return JSONResponse({"error": "no items in cluster"}, status_code=400)
+
+    cluster = {
+        "id": row["id"],
+        "current_headline": row["rewritten_headline"],
+        "headlines": [(i["original_headline"], i["source_name"]) for i in items],
+    }
+
+    cfg = _load_config()
+    client = _anthropic.Anthropic(api_key=api_key)
+    _, response_text = await _rewrite_chunk(client, cfg["ai"]["model"], [cluster])
+    if not response_text:
+        conn.close()
+        return JSONResponse({"error": "rewrite failed"}, status_code=500)
+
+    rw, _ = _parse_rewrite_response(response_text, [cluster], conn)
+    conn.commit()
+    updated = conn.execute("SELECT rewritten_headline FROM story_clusters WHERE id=?", (cluster_id,)).fetchone()
+    new_headline = updated["rewritten_headline"] if updated else None
+    conn.close()
+    return {"status": "ok", "rewrites": rw, "headline": new_headline}
+
+
 @app.post("/api/river/swap-primary")
 async def swap_primary(request: Request):
     body = await request.json()
@@ -1520,6 +1613,33 @@ async def delete_reference(site_id: int):
     conn.commit()
     conn.close()
     return {"status": "ok"}
+
+
+_job_running: dict[str, bool] = {}
+
+@app.post("/api/river/jobs/{job_id}/run")
+async def run_job_now(job_id: str):
+    """Immediately trigger a scheduled job by ID."""
+    job_map = {
+        "rss": poll_feeds,
+        "search": search_sweep,
+        "rewrite": rewrite_pending,
+        "cleanup": cleanup_expired,
+        "dedup": deduplicate_clusters,
+        "reference_check": run_reference_check,
+    }
+    if job_id not in job_map:
+        return JSONResponse({"status": "unknown_job"}, status_code=404)
+    if _job_running.get(job_id):
+        return JSONResponse({"status": "already_running"}, status_code=409)
+    _job_running[job_id] = True
+    async def _run():
+        try:
+            await job_map[job_id]()
+        finally:
+            _job_running[job_id] = False
+    asyncio.ensure_future(_run())
+    return {"status": "started"}
 
 
 _reference_check_running = False
