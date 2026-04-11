@@ -59,7 +59,19 @@ input:focus { border-color: #ffb000; }
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabase = createClient('{{SUPABASE_URL}}', '{{SUPABASE_PUBLISHABLE_KEY}}');
+const SUPA_URL = '{{SUPABASE_URL}}';
+const SUPA_KEY = '{{SUPABASE_PUBLISHABLE_KEY}}';
+
+if (!SUPA_URL || !SUPA_KEY) {
+    document.getElementById('error-msg').textContent = 'Auth not configured — check server environment variables.';
+}
+
+const supabase = createClient(SUPA_URL, SUPA_KEY);
+
+function setAuthCookie(session) {
+    const secure = location.protocol === 'https:' ? '; Secure' : '';
+    document.cookie = `sb-access-token=${session.access_token}; Max-Age=${session.expires_in || 3600}; path=/; SameSite=Lax${secure}`;
+}
 
 window.doRegister = async function() {
     const email = document.getElementById('email').value.trim();
@@ -74,27 +86,33 @@ window.doRegister = async function() {
     btn.disabled = true;
     btn.textContent = 'CREATING ACCOUNT...';
 
-    const { data, error } = await supabase.auth.signUp({ email, password });
+    try {
+        const { data, error } = await supabase.auth.signUp({ email, password });
 
-    if (error) {
-        err.textContent = error.message || 'Registration failed.';
+        if (error) {
+            err.textContent = error.message || 'Registration failed.';
+            btn.disabled = false;
+            btn.textContent = 'CREATE ACCOUNT';
+            return;
+        }
+
+        // Email confirmation required — session will be null
+        if (!data.session) {
+            document.getElementById('success-msg').style.display = 'block';
+            btn.textContent = 'CHECK YOUR EMAIL';
+            return;
+        }
+
+        // No email confirmation — signed in immediately
+        setAuthCookie(data.session);
+        await fetch('/api/user/me', { method: 'POST' });
+        window.location.href = '/onboarding';
+
+    } catch (e) {
+        err.textContent = 'Unexpected error: ' + e.message;
         btn.disabled = false;
         btn.textContent = 'CREATE ACCOUNT';
-        return;
     }
-
-    // Email confirmation required — session will be null
-    if (!data.session) {
-        document.getElementById('success-msg').style.display = 'block';
-        btn.textContent = 'CHECK YOUR EMAIL';
-        return;
-    }
-
-    // No email confirmation — signed in immediately, set cookie then redirect
-    const session = data.session;
-    document.cookie = `sb-access-token=${session.access_token}; Max-Age=${session.expires_in || 3600}; path=/; SameSite=Lax`;
-    await fetch('/api/user/me', { method: 'POST' });
-    window.location.href = '/onboarding';
 };
 
 document.getElementById('password').addEventListener('keydown', e => {

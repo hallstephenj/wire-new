@@ -60,7 +60,20 @@ input:focus { border-color: #ffb000; }
 <script type="module">
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const supabase = createClient('{{SUPABASE_URL}}', '{{SUPABASE_PUBLISHABLE_KEY}}');
+const SUPA_URL = '{{SUPABASE_URL}}';
+const SUPA_KEY = '{{SUPABASE_PUBLISHABLE_KEY}}';
+
+if (!SUPA_URL || !SUPA_KEY) {
+    document.getElementById('error-msg').textContent = 'Auth not configured — check server environment variables.';
+}
+
+const supabase = createClient(SUPA_URL, SUPA_KEY);
+
+function setAuthCookie(session) {
+    const secure = location.protocol === 'https:' ? '; Secure' : '';
+    const maxAge = session.expires_in || 3600;
+    document.cookie = `sb-access-token=${session.access_token}; Max-Age=${maxAge}; path=/; SameSite=Lax${secure}`;
+}
 
 window.doLogin = async function() {
     const email = document.getElementById('email').value.trim();
@@ -74,26 +87,37 @@ window.doLogin = async function() {
     btn.disabled = true;
     btn.textContent = 'SIGNING IN...';
 
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-        err.textContent = error.message || 'Sign in failed.';
+        if (error) {
+            err.textContent = error.message || 'Sign in failed.';
+            btn.disabled = false;
+            btn.textContent = 'SIGN IN';
+            return;
+        }
+
+        if (!data.session) {
+            err.textContent = 'No session returned — confirm your email first.';
+            btn.disabled = false;
+            btn.textContent = 'SIGN IN';
+            return;
+        }
+
+        setAuthCookie(data.session);
+
+        // Ensure profile row exists in SQLite
+        await fetch('/api/user/me', { method: 'POST' });
+
+        const meRes = await fetch('/api/user/me');
+        const me = await meRes.json();
+        window.location.href = me.onboarding_completed ? '/' : '/onboarding';
+
+    } catch (e) {
+        err.textContent = 'Unexpected error: ' + e.message;
         btn.disabled = false;
         btn.textContent = 'SIGN IN';
-        return;
     }
-
-    // Set cookie so the FastAPI backend can read the JWT on every request
-    const session = data.session;
-    const maxAge = session.expires_in || 3600;
-    document.cookie = `sb-access-token=${session.access_token}; Max-Age=${maxAge}; path=/; SameSite=Lax`;
-
-    // Ensure profile row exists in SQLite
-    await fetch('/api/user/me', { method: 'POST' });
-
-    const meRes = await fetch('/api/user/me');
-    const me = await meRes.json();
-    window.location.href = me.onboarding_completed ? '/' : '/onboarding';
 };
 
 document.getElementById('password').addEventListener('keydown', e => {
