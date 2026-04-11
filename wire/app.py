@@ -5,6 +5,7 @@ from datetime import datetime, timezone, timedelta
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Query, Request, Depends
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pathlib import Path
@@ -210,6 +211,7 @@ async def lifespan(app: FastAPI):
     await close_ref_http_client()
 
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 from fastapi import HTTPException as _HTTPException
 from fastapi.exception_handlers import http_exception_handler as _http_exception_handler
@@ -425,7 +427,13 @@ async def get_stories(
     total = conn.execute(f"SELECT COUNT(*) as c FROM story_clusters sc LEFT JOIN curation_overrides co ON co.cluster_id = sc.id WHERE {where_clause}", params).fetchone()["c"]
     conn.close()
 
-    return {"stories": stories, "updated_at": now, "total": total}
+    response = JSONResponse({"stories": stories, "updated_at": now, "total": total})
+    if not user:
+        # Global view — safe to cache at CDN edge for 60 seconds
+        response.headers["Cache-Control"] = "public, max-age=60, s-maxage=60"
+    else:
+        response.headers["Cache-Control"] = "private, no-store"
+    return response
 
 @app.get("/api/health")
 async def health():
