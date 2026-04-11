@@ -19,7 +19,7 @@ def get_conn():
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
-    conn.execute("PRAGMA busy_timeout=30000")
+    conn.execute("PRAGMA busy_timeout=5000")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA cache_size=-64000")   # 64MB page cache
     conn.execute("PRAGMA temp_store=MEMORY")
@@ -264,20 +264,27 @@ def init_db():
     # Upgrade existing installs still on v1
     conn.execute("UPDATE settings SET value = 'v2' WHERE key = 'algorithm_version' AND value = 'v1'")
 
-    # Seed feed_sources from feeds.yaml if empty
-    src_count = conn.execute("SELECT COUNT(*) as c FROM feed_sources").fetchone()["c"]
-    if src_count == 0:
-        now = datetime.now(timezone.utc).isoformat()
-        try:
-            feeds_cfg = load_feeds()
-            for category, feeds in feeds_cfg.get("feeds", {}).items():
-                for feed in feeds:
-                    conn.execute(
-                        "INSERT OR IGNORE INTO feed_sources (name, url, category, enabled, created_at, updated_at) VALUES (?,?,?,1,?,?)",
-                        (feed["name"], feed["url"], category, now, now)
-                    )
-        except Exception:
-            pass
+    # Seed feed_sources from feeds.yaml if empty; always sync enabled/disabled state
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        feeds_cfg = load_feeds()
+        yaml_urls = set()
+        for category, feeds in feeds_cfg.get("feeds", {}).items():
+            for feed in feeds:
+                yaml_urls.add(feed["url"])
+                conn.execute(
+                    "INSERT OR IGNORE INTO feed_sources (name, url, category, enabled, created_at, updated_at) VALUES (?,?,?,1,?,?)",
+                    (feed["name"], feed["url"], category, now, now)
+                )
+        # Disable any feed_sources no longer in feeds.yaml
+        if yaml_urls:
+            placeholders = ",".join("?" for _ in yaml_urls)
+            conn.execute(
+                f"UPDATE feed_sources SET enabled=0, updated_at=? WHERE url NOT IN ({placeholders})",
+                [now] + list(yaml_urls)
+            )
+    except Exception:
+        pass
 
     # Migration: replace Google News proxy feeds with direct RSS URLs
     _gnews_feed_replacements = [

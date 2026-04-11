@@ -27,7 +27,7 @@ def init_http_client():
     """Create the shared HTTP client. Call once at app startup."""
     global _shared_client
     _shared_client = httpx.AsyncClient(
-        timeout=15,
+        timeout=8,
         follow_redirects=True,
         headers={"User-Agent": "DINWIRE/1.0"},
         limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
