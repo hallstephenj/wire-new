@@ -699,10 +699,10 @@ async function applyUserPrefs() {
         if (!res.ok) return;
         const me = await res.json();
 
-        // Wire name replaces logo text
-        const wireName = me.preferences?.wire_name;
-        if (wireName && wireName.trim()) {
-            document.querySelector('.logo').textContent = wireName.trim();
+        // Wire prefix replaces logo text — always [PREFIX]WIRE in caps
+        const prefix = me.preferences?.wire_name;
+        if (prefix && prefix.trim()) {
+            document.querySelector('.logo').textContent = prefix.trim().toUpperCase() + 'WIRE';
         }
 
         // Hide category tabs the user has hidden

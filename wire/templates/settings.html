@@ -102,8 +102,14 @@ input[type="text"]:focus { border-color: #ffb000; }
     <!-- Profile -->
     <h2>Profile</h2>
     <div class="field">
-        <label>Wire Name</label>
-        <input type="text" id="wire-name" value="" maxlength="32" spellcheck="false">
+        <label>Wire Prefix</label>
+        <div style="display:flex;align-items:center;gap:0;">
+            <input type="text" id="wire-name" value="" maxlength="20" spellcheck="false" placeholder="EDRO"
+                   style="width:180px;text-transform:uppercase;"
+                   oninput="updateWirePreview()">
+            <span style="background:#1a1a1a;border:1px solid #333;border-left:none;padding:8px 12px;color:#ffb000;font-weight:700;letter-spacing:2px;">WIRE</span>
+        </div>
+        <div style="margin-top:8px;font-size:10px;color:#444;">Preview: <span id="wire-preview" style="color:#ffb000;letter-spacing:3px;">EDROWIRE</span></div>
     </div>
     <div class="field">
         <label>Email</label>
@@ -159,9 +165,11 @@ async function init() {
     const feedsData = await feedsRes.json();
     allFeeds = feedsData.feeds;
 
-    // Populate profile
-    document.getElementById('wire-name').value = me.preferences?.wire_name || 'My Wire';
+    // Populate profile — wire_name stores just the prefix (e.g. "EDRO")
+    const prefix = (me.preferences?.wire_name || 'EDRO').toUpperCase();
+    document.getElementById('wire-name').value = prefix;
     document.getElementById('user-email').textContent = me.email || '—';
+    updateWirePreview();
 
     // Parse hidden categories
     try { hiddenCats = JSON.parse(me.preferences?.hidden_categories || '[]'); } catch (e) { hiddenCats = []; }
@@ -279,12 +287,17 @@ async function saveCategories() {
     showToast('SAVED');
 }
 
+function updateWirePreview() {
+    const prefix = document.getElementById('wire-name').value.trim().toUpperCase() || 'EDRO';
+    document.getElementById('wire-preview').textContent = prefix + 'WIRE';
+}
+
 async function saveProfile() {
-    const name = document.getElementById('wire-name').value.trim();
+    const prefix = document.getElementById('wire-name').value.trim().toUpperCase();
     await fetch('/api/user/preferences', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ wire_name: name }),
+        body: JSON.stringify({ wire_name: prefix }),
     });
     showToast('SAVED');
 }
