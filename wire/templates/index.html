@@ -693,7 +693,37 @@ function updateBootUI(state) {
     }
 }
 
+async function applyUserPrefs() {
+    try {
+        const res = await fetch('/api/user/me');
+        if (!res.ok) return;
+        const me = await res.json();
+
+        // Wire name replaces logo text
+        const wireName = me.preferences?.wire_name;
+        if (wireName && wireName.trim()) {
+            document.querySelector('.logo').textContent = wireName.trim();
+        }
+
+        // Hide category tabs the user has hidden
+        let hiddenCats = [];
+        try { hiddenCats = JSON.parse(me.preferences?.hidden_categories || '[]'); } catch (_) {}
+        if (hiddenCats.length) {
+            document.querySelectorAll('#cat-tabs .tab[data-cat]').forEach(btn => {
+                if (hiddenCats.includes(btn.dataset.cat)) {
+                    btn.style.display = 'none';
+                    // If the active tab is now hidden, switch to 'all'
+                    if (btn.classList.contains('active')) {
+                        document.querySelector('#cat-tabs .tab[data-cat="all"]').click();
+                    }
+                }
+            });
+        }
+    } catch (_) {}
+}
+
 async function bootCheck() {
+    applyUserPrefs();
     try {
         const resp = await fetch('/api/boot-status');
         const state = await resp.json();

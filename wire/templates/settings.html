@@ -113,7 +113,10 @@ input[type="text"]:focus { border-color: #ffb000; }
 
     <!-- Feeds -->
     <h2>Feeds</h2>
-    <input type="text" class="feed-search" placeholder="Search feeds..." oninput="filterFeeds(this.value)">
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <input type="text" class="feed-search" style="margin-bottom:0;flex:1;" placeholder="Search feeds..." oninput="filterFeeds(this.value)">
+        <button class="btn-outline" onclick="enableAllFeeds()">ENABLE ALL</button>
+    </div>
     <div class="feed-list" id="feed-list"></div>
     <div class="pro-gate" id="custom-feed-section">
         <span class="pro-gate-badge">PRO</span>
@@ -216,6 +219,20 @@ async function toggleFeed(el, feedId) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ enabled: !on }),
     });
+}
+
+async function enableAllFeeds() {
+    const disabled = allFeeds.filter(f => f.subscribed !== 1);
+    await Promise.all(disabled.map(f =>
+        fetch(`/api/user/feeds/${f.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: true }),
+        })
+    ));
+    allFeeds.forEach(f => f.subscribed = 1);
+    renderFeeds(allFeeds);
+    showToast('ALL FEEDS ENABLED');
 }
 
 async function addCustomFeed() {
