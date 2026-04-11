@@ -220,6 +220,19 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+import time as _time
+
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    start = _time.perf_counter()
+    response = await call_next(request)
+    ms = (_time.perf_counter() - start) * 1000
+    if ms > 2000:
+        log.error(f"VERY SLOW {request.method} {request.url.path} {ms:.0f}ms")
+    elif ms > 500:
+        log.warning(f"SLOW {request.method} {request.url.path} {ms:.0f}ms")
+    return response
+
 from fastapi import HTTPException as _HTTPException
 from fastapi.exception_handlers import http_exception_handler as _http_exception_handler
 
@@ -755,6 +768,8 @@ async def update_preferences(request: Request, user=Depends(require_user)):
 
 @app.get("/api/user/feeds")
 async def user_feeds(request: Request, user=Depends(require_user)):
+    import time as _t
+    t0 = _t.perf_counter()
     conn = get_conn()
     rows = conn.execute("""
         SELECT fs.id, fs.name, fs.url, fs.category, fs.enabled as source_enabled,
@@ -765,6 +780,9 @@ async def user_feeds(request: Request, user=Depends(require_user)):
         ORDER BY fs.category, fs.name
     """, (user["id"],)).fetchall()
     conn.close()
+    ms = (_t.perf_counter() - t0) * 1000
+    if ms > 200:
+        log.warning(f"Slow /api/user/feeds DB query: {ms:.0f}ms")
     return {"feeds": [dict(r) for r in rows]}
 
 

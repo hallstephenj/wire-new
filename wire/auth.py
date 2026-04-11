@@ -1,10 +1,13 @@
 import os
 import time
+import logging
 import asyncio
 import httpx
 from jose import jwt, jwk, JWTError
 from fastapi import Request, HTTPException
 from wire.db import get_conn
+
+log = logging.getLogger("wire.auth")
 
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "")
 _JWKS_URL = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
@@ -24,9 +27,12 @@ async def _fetch_jwks(force: bool = False) -> list:
         now = time.time()
         if not force and _jwks_cache["keys"] and (now - _jwks_cache["fetched_at"]) < _JWKS_TTL:
             return _jwks_cache["keys"]
+        t_jwks = time.perf_counter()
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(_JWKS_URL)
             resp.raise_for_status()
+        jwks_ms = (time.perf_counter() - t_jwks) * 1000
+        log.info(f"JWKS fetch: {jwks_ms:.0f}ms")
         keys = resp.json().get("keys", [])
         _jwks_cache["keys"] = keys
         _jwks_cache["fetched_at"] = time.time()
@@ -83,15 +89,26 @@ async def get_current_user(request: Request):
     if not token:
         return None
     try:
+        t0 = time.perf_counter()
         payload = await _verify_token(token)
+        jwt_ms = (time.perf_counter() - t0) * 1000
+        if jwt_ms > 200:
+            log.warning(f"Slow JWT verify: {jwt_ms:.0f}ms")
+
         user_id = payload.get("sub")
         if not user_id:
             return None
+
+        t1 = time.perf_counter()
         conn = get_conn()
         profile = conn.execute(
             "SELECT * FROM user_profiles WHERE id=?", (user_id,)
         ).fetchone()
         conn.close()
+        db_ms = (time.perf_counter() - t1) * 1000
+        if db_ms > 200:
+            log.warning(f"Slow auth DB lookup: {db_ms:.0f}ms")
+
         if not profile:
             return {"id": user_id, "is_admin": 0, "subscription_status": "free",
                     "onboarding_completed": 0, "email": payload.get("email")}
