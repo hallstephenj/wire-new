@@ -122,12 +122,12 @@ def _parse_rewrite_response(text, clusters, conn):
     return rewrites, recats
 
 
-# Max clusters per single API request (Haiku handles this easily)
-_BATCH_CHUNK_SIZE = 50
+# Max clusters per single API request
+_BATCH_CHUNK_SIZE = 15
 # Number of concurrent API requests
-_PARALLEL_REQUESTS = 3
+_PARALLEL_REQUESTS = 2
 # API timeout in seconds
-_API_TIMEOUT = 60
+_API_TIMEOUT = 45
 # Retry config
 _MAX_RETRIES = 2
 _RETRY_BACKOFF = 2  # seconds, doubled each retry
