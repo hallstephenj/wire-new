@@ -391,6 +391,7 @@ async def get_stories(
                COALESCE(co.breaking, 0) as breaking,
                co.scoop_boosted_at,
                COALESCE(co.market_mover, 0) as market_mover,
+               co.market_ticker,
                (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
         FROM story_clusters sc
         LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
@@ -441,6 +442,7 @@ async def get_stories(
             "breaking": bool(r["breaking"]),
             "scoop": bool(r["scoop_boosted_at"]),
             "market_mover": r["market_mover"],
+            "market_ticker": r["market_ticker"],
             "other_sources": other_sources,
             "items": items,
         })
@@ -1450,6 +1452,7 @@ async def river_stories(
                COALESCE(co.breaking, 0) as breaking,
                COALESCE(co.boost, 0) as boost,
                COALESCE(co.market_mover, 0) as market_mover,
+               co.market_ticker,
                co.note,
                co.pin_rank,
                (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
@@ -1503,6 +1506,7 @@ async def river_stories(
             "breaking": bool(r["breaking"]),
             "boost": r["boost"],
             "market_mover": r["market_mover"],
+            "market_ticker": r["market_ticker"],
             "note": r["note"],
             "other_sources": other_sources,
             "items": [{"id": i["id"], "headline": i["original_headline"], "url": i["source_url"],

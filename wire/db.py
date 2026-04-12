@@ -194,6 +194,8 @@ def init_db():
         conn.execute("ALTER TABLE curation_overrides ADD COLUMN scoop_boosted_at TEXT")
     if "market_mover" not in co_cols:
         conn.execute("ALTER TABLE curation_overrides ADD COLUMN market_mover INTEGER DEFAULT 0")
+    if "market_ticker" not in co_cols:
+        conn.execute("ALTER TABLE curation_overrides ADD COLUMN market_ticker TEXT")
 
     # Composite index (created after migrations so boost column exists)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_curation_composite ON curation_overrides(cluster_id, hidden, pinned, boost)")

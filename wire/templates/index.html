@@ -167,6 +167,11 @@ header {
     margin-left: 4px;
     letter-spacing: 0;
     opacity: 0.85;
+    text-decoration: none;
+}
+.market-mover:hover {
+    opacity: 1;
+    text-decoration: underline;
 }
 
 .market-mover.mm-3 {
@@ -870,7 +875,16 @@ function renderStory(s) {
 
     const energy = wireEnergy(s);
     const ballClass = s.scoop ? 'wire-ball scoop' : 'wire-ball';
-    const mmIndicator = (s.market_mover >= 2) ? `<span class="market-mover${s.market_mover === 3 ? ' mm-3' : ''}" title="Market mover: ${s.market_mover}/3">$</span>` : '';
+    const mmIndicator = (s.market_mover >= 2) ? (() => {
+        const cls = `market-mover${s.market_mover === 3 ? ' mm-3' : ''}`;
+        const label = s.market_ticker ? `$${s.market_ticker}` : '$';
+        const title = `Market mover: ${s.market_mover}/3${s.market_ticker ? ` (${s.market_ticker})` : ''}`;
+        if (s.market_ticker) {
+            const href = `https://www.google.com/search?q=%24${s.market_ticker.toLowerCase()}`;
+            return `<a href="${href}" target="_blank" rel="noopener" class="${cls}" title="${title}">${label}</a>`;
+        }
+        return `<span class="${cls}" title="${title}">${label}</span>`;
+    })() : '';
 
     return `<div class="story" data-id="${s.id}">
         <div class="${ballClass}" style="--energy:${energy.toFixed(3)}"></div>

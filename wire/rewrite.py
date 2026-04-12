@@ -36,16 +36,18 @@ JOB 3 — MARKET IMPACT: Rate how likely this story is to move financial markets
 - 1 (LOW): Industry trends, minor product updates, executive commentary, analyst predictions, startup funding rounds
 - 0 (NONE): Human interest, lifestyle, entertainment, niche tech, gadget reviews, opinion pieces, local news
 
+JOB 4 — TICKER: If market impact is 2 or 3, identify the single most relevant publicly traded stock or crypto ticker symbol affected by this story (e.g. AAPL, GOOG, MSFT, NVDA, BTC, ETH). Use the primary exchange ticker (NYSE/NASDAQ for stocks). If the story affects the broad market or macro economy with no single primary ticker, use SPY. If market impact is 0 or 1, output NONE.
+
 For each numbered cluster, respond with EXACTLY this format:
-1. CATEGORY | REWRITTEN HEADLINE | MARKET_SCORE
-2. CATEGORY | REWRITTEN HEADLINE | MARKET_SCORE
+1. CATEGORY | REWRITTEN HEADLINE | MARKET_SCORE | TICKER
+2. CATEGORY | REWRITTEN HEADLINE | MARKET_SCORE | TICKER
 ...
 
 Examples:
-1. TECH | APPLE PLANS LOW-COST MACBOOK IN MULTIPLE COLORS FOR 2026: BLOOMBERG | 2
-2. POLITICS | TRUMP VOWS NEW TARIFFS AFTER SUPREME COURT STRIKES DOWN EMERGENCY POWERS | 3
-3. MARKETS | OPENAI NOW TARGETING MORE THAN $280B IN REVENUE BY 2030: CNBC | 2
-4. WORLD | EARTHQUAKE KILLS AT LEAST 200 IN WESTERN TURKEY | 1"""
+1. TECH | APPLE PLANS LOW-COST MACBOOK IN MULTIPLE COLORS FOR 2026: BLOOMBERG | 2 | AAPL
+2. POLITICS | TRUMP VOWS NEW TARIFFS AFTER SUPREME COURT STRIKES DOWN EMERGENCY POWERS | 3 | SPY
+3. MARKETS | OPENAI NOW TARGETING MORE THAN $280B IN REVENUE BY 2030: CNBC | 2 | MSFT
+4. WORLD | EARTHQUAKE KILLS AT LEAST 200 IN WESTERN TURKEY | 1 | NONE"""
 
 VALID_CATEGORIES = {"tech", "markets", "politics", "world", "general"}
 
@@ -82,10 +84,11 @@ def _parse_rewrite_response(text, clusters, conn):
             if line.startswith(prefix):
                 line = line[len(prefix):].strip()
 
-        # Parse "CATEGORY | HEADLINE | MARKET_SCORE"
+        # Parse "CATEGORY | HEADLINE | MARKET_SCORE | TICKER"
         category = None
         rewritten = line
         market_mover = 0
+        market_ticker = None
         if "|" in line:
             parts = line.split("|")
             cat_candidate = parts[0].strip().lower()
@@ -100,6 +103,11 @@ def _parse_rewrite_response(text, clusters, conn):
                             market_mover = score
                     except (ValueError, IndexError):
                         pass
+                # Extract ticker from fourth field if present
+                if len(parts) >= 4:
+                    ticker = parts[3].strip().upper()
+                    if ticker and ticker != "NONE" and ticker.isalpha() and len(ticker) <= 5:
+                        market_ticker = ticker
 
         if rewritten and len(rewritten) <= 120:
             ev("rewrite", before=cluster["current_headline"], after=rewritten, category=category or "unchanged", market_mover=market_mover)
@@ -112,12 +120,12 @@ def _parse_rewrite_response(text, clusters, conn):
                        (category, cluster["id"]))
             recats += 1
 
-        # Write market_mover score to curation_overrides
+        # Write market_mover score and ticker to curation_overrides
         conn.execute("""
-            INSERT INTO curation_overrides (cluster_id, market_mover, updated_at)
-            VALUES (?, ?, datetime('now'))
-            ON CONFLICT(cluster_id) DO UPDATE SET market_mover=?, updated_at=datetime('now')
-        """, (cluster["id"], market_mover, market_mover))
+            INSERT INTO curation_overrides (cluster_id, market_mover, market_ticker, updated_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(cluster_id) DO UPDATE SET market_mover=?, market_ticker=?, updated_at=datetime('now')
+        """, (cluster["id"], market_mover, market_ticker, market_mover, market_ticker))
 
     return rewrites, recats
 
