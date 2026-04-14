@@ -305,6 +305,26 @@ header {
     text-align: center;
 }
 
+/* ── Related-story groups ─────────────────────────────────────────── */
+.story-group {
+    border-left: 2px solid #2a2a2a;
+    margin: 4px 0;
+    padding-left: 10px;
+}
+.story-group .story {
+    border-bottom: 1px solid #161616;
+}
+.story-group .story:last-child {
+    border-bottom: 1px solid #111;
+}
+.group-label {
+    font-size: 8px;
+    color: #3a3a3a;
+    letter-spacing: 2px;
+    padding: 4px 0 2px;
+    text-transform: uppercase;
+}
+
 /* ── Mobile responsive ──────────────────────────────────────────────── */
 @media (max-width: 700px) {
     body { font-size: 12px; }
@@ -922,6 +942,36 @@ function toggleItems(id) {
     }
 }
 
+/* ── Story list rendering (handles groups) ────────────────────────── */
+function renderStoryList(stories, offset) {
+    let html = '';
+    let i = 0;
+    while (i < stories.length) {
+        const s = stories[i];
+        const absIdx = offset + i;
+        if (absIdx > 0 && absIdx % AD_INTERVAL === 0) {
+            html += `<div class="ad-slot"><!-- ad --></div>`;
+        }
+        if (s.group_id) {
+            // Collect consecutive stories sharing the same group_id
+            const members = [s];
+            while (i + 1 < stories.length && stories[i + 1].group_id === s.group_id) {
+                i++;
+                members.push(stories[i]);
+            }
+            const label = s.group_label ? esc(s.group_label) : 'RELATED';
+            html += `<div class="story-group" data-group="${esc(s.group_id)}">`;
+            html += `<div class="group-label">RELATED · ${label}</div>`;
+            members.forEach(m => { html += renderStory(m); });
+            html += `</div>`;
+        } else {
+            html += renderStory(s);
+        }
+        i++;
+    }
+    return html;
+}
+
 /* ── Fetch & pagination ───────────────────────────────────────────── */
 let _refreshTimer = null;
 let _lastStoryData = new Map(); // id -> story JSON for diffing
@@ -930,6 +980,7 @@ function _storyChanged(oldS, newS) {
     return oldS.headline !== newS.headline
         || oldS.source_count !== newS.source_count
         || oldS.market_mover !== newS.market_mover
+        || (oldS.group_id || null) !== (newS.group_id || null)
         || (oldS.other_sources || []).length !== (newS.other_sources || []).length;
 }
 
@@ -945,30 +996,9 @@ function _applyDiff(container, stories) {
         && newIds.every((id, i) => id === oldIdList[i]);
 
     if (!orderMatch) {
-        // Order changed or different stories — full rebuild but reuse unchanged nodes
-        const existingNodes = new Map();
-        oldNodes.forEach(n => existingNodes.set(n.dataset.id, n));
-
-        // Also collect ad slots to reinsert
-        const frag = document.createDocumentFragment();
-        stories.forEach((s, i) => {
-            if ((currentOffset + i) > 0 && (currentOffset + i) % AD_INTERVAL === 0) {
-                const ad = document.createElement('div');
-                ad.className = 'ad-slot';
-                ad.innerHTML = '<!-- ad -->';
-                frag.appendChild(ad);
-            }
-            const old = existingNodes.get(s.id);
-            if (old && !_storyChanged(_lastStoryData.get(s.id) || {}, s)) {
-                frag.appendChild(old);
-            } else {
-                const wrapper = document.createElement('div');
-                wrapper.innerHTML = renderStory(s);
-                frag.appendChild(wrapper.firstElementChild);
-            }
-        });
-        container.innerHTML = '';
-        container.appendChild(frag);
+        // Order changed or different stories — full rebuild using renderStoryList
+        // (handles group wrappers correctly)
+        container.innerHTML = renderStoryList(stories, currentOffset);
     } else {
         // Same order — only update changed stories in place
         stories.forEach((s, i) => {
@@ -1000,14 +1030,7 @@ async function fetchStories(append) {
         const container = document.getElementById('stories');
 
         if (append) {
-            let html = '';
-            data.stories.forEach((s, i) => {
-                if ((currentOffset + i) > 0 && (currentOffset + i) % AD_INTERVAL === 0) {
-                    html += `<div class="ad-slot"><!-- ad --></div>`;
-                }
-                html += renderStory(s);
-            });
-            container.insertAdjacentHTML('beforeend', html);
+            container.insertAdjacentHTML('beforeend', renderStoryList(data.stories, currentOffset));
             data.stories.forEach(s => _lastStoryData.set(s.id, s));
         } else if (!data.stories.length) {
             container.innerHTML = '<div class="loading">No stories yet. Feeds are still loading — this page will refresh automatically.</div>';
@@ -1017,14 +1040,7 @@ async function fetchStories(append) {
             _applyDiff(container, data.stories);
         } else {
             // First load or offset change — full render
-            let html = '';
-            data.stories.forEach((s, i) => {
-                if ((currentOffset + i) > 0 && (currentOffset + i) % AD_INTERVAL === 0) {
-                    html += `<div class="ad-slot"><!-- ad --></div>`;
-                }
-                html += renderStory(s);
-            });
-            container.innerHTML = html;
+            container.innerHTML = renderStoryList(data.stories, currentOffset);
             _lastStoryData.clear();
             data.stories.forEach(s => _lastStoryData.set(s.id, s));
         }

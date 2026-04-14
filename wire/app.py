@@ -23,6 +23,7 @@ from wire.events import snapshot as events_snapshot
 from wire.scores import all_scores, get_score
 from wire.reference import run_reference_check, init_ref_http_client, close_ref_http_client
 from wire.algorithm import get_active_version, build_source_quality_case, build_reputable_sources_sql, build_hot_score_sql, build_market_mover_case_sql, list_versions, set_active_version
+from wire.group import assign_groups
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("wire")
@@ -35,6 +36,41 @@ logging.getLogger("transformers").setLevel(logging.ERROR)
 logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 
 scheduler = AsyncIOScheduler()
+
+
+def _coalesce_groups(stories: list) -> list:
+    """Reorder story list so grouped stories are adjacent.
+
+    Each group floats to the position of its highest-ranked (first-encountered)
+    member. Subsequent members are pulled from their original positions and
+    inserted immediately after the previous group member.
+    """
+    result = []
+    placed: set = set()
+    group_tail: dict = {}  # group_id → current insertion index in result
+
+    for story in stories:
+        sid = story["id"]
+        if sid in placed:
+            continue
+        gid = story.get("group_id")
+        if not gid:
+            result.append(story)
+            placed.add(sid)
+        elif gid not in group_tail:
+            # First member of this group — place at current end
+            group_tail[gid] = len(result)
+            result.append(story)
+            placed.add(sid)
+        else:
+            # Subsequent member — insert right after the previous group member
+            insert_at = group_tail[gid] + 1
+            result.insert(insert_at, story)
+            group_tail[gid] = insert_at
+            placed.add(sid)
+
+    return result
+
 
 boot_state = {
     "phase": "reference_check",   # reference_check → polling → clustering → rewriting → ready
@@ -190,6 +226,7 @@ async def _start_scheduler_after_boot():
     scheduler.add_job(poll_feeds, "interval", minutes=cfg["polling"]["rss_interval_minutes"], id="rss", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(search_sweep, "interval", minutes=cfg["polling"]["search_interval_minutes"], id="search", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(rewrite_pending, "interval", minutes=15, id="rewrite", next_run_time=datetime.now(timezone.utc))
+    scheduler.add_job(assign_groups, "interval", minutes=15, id="group", next_run_time=datetime.now(timezone.utc))
     scheduler.add_job(cleanup_expired, "interval", hours=cfg["polling"]["cleanup_interval_hours"], id="cleanup")
     scheduler.add_job(run_reference_check, "cron", hour=6, id="reference_check")
     scheduler.add_job(deduplicate_clusters, "interval", minutes=30, id="dedup")
@@ -392,9 +429,12 @@ async def get_stories(
                co.scoop_boosted_at,
                COALESCE(co.market_mover, 0) as market_mover,
                co.market_ticker,
+               sc.group_id,
+               cg.label as group_label,
                (SELECT ri2.original_headline FROM raw_items ri2 WHERE ri2.cluster_id = sc.id LIMIT 1) as original_headline
         FROM story_clusters sc
         LEFT JOIN curation_overrides co ON co.cluster_id = sc.id
+        LEFT JOIN cluster_groups cg ON cg.id = sc.group_id
         WHERE {where_clause}
         ORDER BY {order}
         LIMIT ? OFFSET ?
@@ -443,9 +483,15 @@ async def get_stories(
             "scoop": bool(r["scoop_boosted_at"]),
             "market_mover": r["market_mover"],
             "market_ticker": r["market_ticker"],
+            "group_id": r["group_id"],
+            "group_label": r["group_label"],
             "other_sources": other_sources,
             "items": items,
         })
+
+    # Bring grouped stories adjacent to each other (positioned at the rank of
+    # the first/highest-ranked member so the group floats to the best story's slot)
+    stories = _coalesce_groups(stories)
 
     total = conn.execute(f"SELECT COUNT(*) as c FROM story_clusters sc LEFT JOIN curation_overrides co ON co.cluster_id = sc.id WHERE {where_clause}", params).fetchone()["c"]
     conn.close()

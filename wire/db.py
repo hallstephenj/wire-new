@@ -28,6 +28,12 @@ def get_conn():
 def init_db():
     conn = get_conn()
     conn.executescript("""
+    CREATE TABLE IF NOT EXISTS cluster_groups (
+        id TEXT PRIMARY KEY,
+        label TEXT,
+        created_at TEXT,
+        updated_at TEXT
+    );
     CREATE TABLE IF NOT EXISTS story_clusters (
         id TEXT PRIMARY KEY,
         rewritten_headline TEXT,
@@ -38,7 +44,8 @@ def init_db():
         first_seen TEXT,
         last_updated TEXT,
         expires_at TEXT,
-        published_at TEXT
+        published_at TEXT,
+        group_id TEXT REFERENCES cluster_groups(id)
     );
     CREATE TABLE IF NOT EXISTS raw_items (
         id TEXT PRIMARY KEY,
@@ -196,6 +203,12 @@ def init_db():
         conn.execute("ALTER TABLE curation_overrides ADD COLUMN market_mover INTEGER DEFAULT 0")
     if "market_ticker" not in co_cols:
         conn.execute("ALTER TABLE curation_overrides ADD COLUMN market_ticker TEXT")
+
+    # Migration: add group_id to story_clusters if missing
+    sc_cols = [r[1] for r in conn.execute("PRAGMA table_info(story_clusters)").fetchall()]
+    if "group_id" not in sc_cols:
+        conn.execute("ALTER TABLE story_clusters ADD COLUMN group_id TEXT")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_clusters_group ON story_clusters(group_id)")
 
     # Composite index (created after migrations so boost column exists)
     conn.execute("CREATE INDEX IF NOT EXISTS idx_curation_composite ON curation_overrides(cluster_id, hidden, pinned, boost)")
