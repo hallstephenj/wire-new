@@ -1,64 +1,55 @@
 import re
 import uuid
 import logging
-from collections import Counter
 from datetime import datetime, timezone
 
 from wire.db import get_conn
 
 log = logging.getLogger("wire.group")
 
-# Uppercase tokens too generic to anchor a cluster group
-_STOPWORDS = frozenset({
-    'THE', 'AND', 'FOR', 'FROM', 'WITH', 'THIS', 'THAT', 'HAVE', 'BEEN',
-    'ARE', 'WAS', 'HAS', 'NOT', 'BUT', 'ITS', 'ALL', 'CAN', 'NEW', 'TOP',
-    'AFTER', 'OVER', 'INTO', 'AMID', 'SAYS', 'SAID', 'MORE', 'ALSO', 'BACK',
-    'WILL', 'WOULD', 'COULD', 'SHOULD', 'MAY', 'PLAN', 'PLANS', 'MOVE',
-    'MOVES', 'SET', 'GETS', 'MAKE', 'LOOK', 'FIRST', 'LAST', 'NEXT',
-    'JUST', 'STILL', 'THAN', 'WHAT', 'WHEN', 'WHO', 'HOW', 'WHY', 'NOW',
-    'OUT', 'OFF', 'WAY', 'NEWS', 'REPORT', 'SOURCES', 'OFFICIALS',
-    'MILLION', 'BILLION', 'PERCENT', 'DEAL', 'BILL', 'LAW', 'VOTE',
-    'HOUSE', 'SENATE', 'STATE', 'MAJOR', 'LARGE', 'HIGH', 'LOW', 'LONG',
-    'COMPANY', 'MARKET', 'STOCK', 'PRICE', 'SHARE', 'SHARES',
-    'AGAINST', 'BEFORE', 'DURING', 'ABOUT', 'BETWEEN', 'AMID', 'OVER',
-    'YEAR', 'YEARS', 'WEEK', 'WEEKS', 'DAY', 'DAYS', 'TIME', 'TIMES',
-    'CALLS', 'CALL', 'PUSH', 'PUSHES', 'SEEK', 'SEEKS', 'FACE', 'FACES',
-    'SAYS', 'NEED', 'NEEDS', 'SHOW', 'SHOWS', 'CITE', 'CITES', 'HITS',
-    'GAIN', 'GAINS', 'LOSE', 'LOSES', 'RISE', 'RISES', 'FALL', 'FALLS',
-    'AMID', 'LEAD', 'LEADS', 'HELP', 'HELPS', 'WARN', 'WARNS', 'PLAN',
-    'PLANS', 'SIGN', 'SIGNS', 'FILE', 'FILES', 'HOLD', 'HOLDS', 'JOIN',
-})
+# Similarity range for "related but not duplicate" grouping.
+# Below GROUP_SIM_MIN → unrelated. Above GROUP_SIM_MAX → should have been deduped.
+GROUP_SIM_MIN = 0.12
+GROUP_SIM_MAX = 0.28
 
-# Max clusters to scan per grouping run
+# Max clusters to scan per run
 _MAX_CLUSTERS = 500
-# Minimum group size to bother creating
+# Min members to form a visible group
 _MIN_GROUP_SIZE = 2
-# Cap on group size — avoids mega-groups on very common entities
+# Cap to avoid mega-groups on very common topics
 _MAX_GROUP_SIZE = 6
-# Max number of clusters a given ngram may appear in before it's deemed too generic
-_MAX_NGRAM_FREQ = 8
+
+# Demonym / adjective → canonical noun normalization applied before vectorizing.
+# Prevents IRANIAN and IRAN from being treated as different tokens.
+_NORM_MAP = {
+    'IRANIAN': 'IRAN', 'IRANIANS': 'IRAN',
+    'RUSSIAN': 'RUSSIA', 'RUSSIANS': 'RUSSIA',
+    'UKRAINIAN': 'UKRAINE', 'UKRAINIANS': 'UKRAINE',
+    'CHINESE': 'CHINA',
+    'ISRAELI': 'ISRAEL', 'ISRAELIS': 'ISRAEL',
+    'TAIWANESE': 'TAIWAN',
+    'PALESTINIAN': 'PALESTINE', 'PALESTINIANS': 'PALESTINE',
+    'GAZAN': 'GAZA', 'GAZANS': 'GAZA',
+    'SYRIAN': 'SYRIA', 'SYRIANS': 'SYRIA',
+    'KOREAN': 'KOREA', 'KOREANS': 'KOREA',
+    'SAUDI': 'SAUDI',
+    'AFGHAN': 'AFGHANISTAN', 'AFGHANS': 'AFGHANISTAN',
+    'TURKISH': 'TURKEY', 'TURKS': 'TURKEY',
+    'MEXICAN': 'MEXICO', 'MEXICANS': 'MEXICO',
+    'CUBAN': 'CUBA', 'CUBANS': 'CUBA',
+    'VENEZUELAN': 'VENEZUELA', 'VENEZUELANS': 'VENEZUELA',
+    'PAKISTANI': 'PAKISTAN', 'PAKISTANIS': 'PAKISTAN',
+}
+_NORM_RE = re.compile(r'\b(' + '|'.join(re.escape(k) for k in _NORM_MAP) + r')\b')
 
 
-def _tokenize(headline: str) -> list:
-    """Extract significant uppercase tokens from a rewritten headline.
-    Strips source attribution suffix (': CNBC') before tokenizing."""
-    headline = re.sub(r':\s+[A-Z][A-Z\s]+$', '', headline)
-    tokens = re.findall(r'[A-Z]{2,}', headline)
-    return [t for t in tokens if t not in _STOPWORDS and len(t) >= 3]
-
-
-def _ngrams(tokens: list, n: int) -> set:
-    return {' '.join(tokens[i:i + n]) for i in range(len(tokens) - n + 1)}
-
-
-def _headline_ngrams(headline: str) -> set:
-    """Bigrams + trigrams of significant tokens from a rewritten headline."""
-    tokens = _tokenize(headline)
-    return _ngrams(tokens, 2) | _ngrams(tokens, 3)
+def _normalize(headline: str) -> str:
+    """Apply demonym/adjective normalization so e.g. IRANIAN → IRAN."""
+    return _NORM_RE.sub(lambda m: _NORM_MAP[m.group()], headline)
 
 
 def _connected_components(nodes: set, edges: set) -> list:
-    """Union-find: return list of connected-component sets."""
+    """Union-find: return list of connected-component node-sets."""
     parent = {n: n for n in nodes}
 
     def find(x):
@@ -83,20 +74,66 @@ def _connected_components(nodes: set, edges: set) -> list:
     return [c for c in components.values() if len(c) >= _MIN_GROUP_SIZE]
 
 
+def _group_label(member_headlines: list) -> str:
+    """Pick the best human-readable label for a group.
+
+    Finds words that appear in the most member headlines (after normalization
+    and stopword filtering) weighted by length, preferring longer proper-noun
+    sequences.
+    """
+    _LABEL_STOP = frozenset({
+        'the', 'and', 'for', 'from', 'with', 'this', 'that', 'have', 'been',
+        'are', 'was', 'has', 'not', 'but', 'its', 'all', 'can', 'new', 'top',
+        'after', 'over', 'into', 'amid', 'says', 'said', 'more', 'also', 'back',
+        'will', 'would', 'could', 'should', 'may', 'plan', 'move', 'set', 'gets',
+        'make', 'look', 'first', 'last', 'next', 'just', 'still', 'than', 'now',
+        'out', 'off', 'way', 'news', 'report', 'sources', 'officials', 'begin',
+        'begins', 'threat', 'threats', 'call', 'calls', 'push', 'seek', 'face',
+        'gain', 'lose', 'rise', 'fall', 'lead', 'help', 'warn', 'sign', 'file',
+        'hold', 'join', 'show', 'cite', 'hit', 'use', 'say', 'get', 'go', 'do',
+    })
+
+    from collections import Counter
+    word_counts: Counter = Counter()
+    for hl in member_headlines:
+        words = re.findall(r'[a-z]{3,}', _normalize(hl).lower())
+        for w in set(words):
+            if w not in _LABEL_STOP:
+                word_counts[w] += 1
+
+    if not word_counts:
+        return 'RELATED'
+
+    # Score: (appearances across members) × word_length — longer specific words win
+    best = max(word_counts, key=lambda w: word_counts[w] * len(w))
+    return best.upper()
+
+
 def assign_groups() -> int:
     """
-    Group semantically related-but-distinct clusters by shared named-entity
-    bigrams/trigrams. Resets all group assignments each call.
+    Group related-but-distinct clusters using TF-IDF cosine similarity on
+    normalized rewritten headlines. Pairs with similarity in
+    [GROUP_SIM_MIN, GROUP_SIM_MAX] are considered "related". Connected
+    components of related pairs become groups.
+
+    Runs a full reset each call — previous group_ids are cleared and reassigned.
     Returns the number of groups created.
     """
+    try:
+        import numpy as np
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.metrics.pairwise import cosine_similarity
+    except ImportError:
+        log.warning("sklearn not available — skipping grouping")
+        return 0
+
     conn = get_conn()
     now = datetime.now(timezone.utc).isoformat()
 
-    # Full reset — recompute groups from scratch
+    # Full reset — recompute groups from scratch each run
     conn.execute("UPDATE story_clusters SET group_id = NULL WHERE group_id IS NOT NULL")
     conn.execute("DELETE FROM cluster_groups")
 
-    # Active rewritten clusters only
     rows = conn.execute("""
         SELECT id, rewritten_headline
         FROM story_clusters
@@ -112,40 +149,29 @@ def assign_groups() -> int:
         conn.close()
         return 0
 
-    # Ngrams per cluster
-    cluster_ngrams: dict = {}
-    for r in rows:
-        ng = _headline_ngrams(r['rewritten_headline'])
-        if ng:
-            cluster_ngrams[r['id']] = ng
+    ids = [r['id'] for r in rows]
+    # Normalize demonyms before vectorizing so IRANIAN and IRAN are the same token
+    headlines = [_normalize(r['rewritten_headline']) for r in rows]
 
-    # ngram → [cluster_ids] index
-    ngram_index: dict = {}
-    for cid, ngrams in cluster_ngrams.items():
-        for ng in ngrams:
-            ngram_index.setdefault(ng, []).append(cid)
-
-    # Keep only ngrams appearing in 2..MAX_NGRAM_FREQ clusters
-    useful_ngrams = {
-        ng: cids for ng, cids in ngram_index.items()
-        if _MIN_GROUP_SIZE <= len(cids) <= _MAX_NGRAM_FREQ
-    }
-
-    if not useful_ngrams:
+    # TF-IDF on unigrams + bigrams; sublinear_tf reduces impact of repeated words
+    try:
+        vec = TfidfVectorizer(ngram_range=(1, 2), sublinear_tf=True, min_df=1)
+        tfidf = vec.fit_transform(headlines)
+    except ValueError:
         conn.commit()
         conn.close()
         return 0
 
-    # Build edges and track which ngrams each edge shares
+    # Pairwise cosine similarities — 500×500 is fast
+    sims = cosine_similarity(tfidf)
+
+    # Build edges for pairs in the related-but-not-duplicate similarity band
     edges: set = set()
-    edge_ngrams: dict = {}
-    for ng, cids in useful_ngrams.items():
-        for i in range(len(cids)):
-            for j in range(i + 1, len(cids)):
-                a, b = cids[i], cids[j]
-                key = (min(a, b), max(a, b))
-                edges.add(key)
-                edge_ngrams.setdefault(key, []).append(ng)
+    for i in range(len(ids)):
+        for j in range(i + 1, len(ids)):
+            sim = float(sims[i, j])
+            if GROUP_SIM_MIN <= sim <= GROUP_SIM_MAX:
+                edges.add((ids[i], ids[j]))
 
     if not edges:
         conn.commit()
@@ -155,26 +181,17 @@ def assign_groups() -> int:
     all_nodes = {n for edge in edges for n in edge}
     components = _connected_components(all_nodes, edges)
 
+    # Map id → headline for label computation
+    headline_by_id = {r['id']: r['rewritten_headline'] for r in rows}
+
     groups_created = 0
     for component in components:
         if len(component) > _MAX_GROUP_SIZE:
             continue
 
-        # Best label: most common shared ngram, preferring trigrams (more specific)
-        all_shared = []
-        cids = list(component)
-        for i in range(len(cids)):
-            for j in range(i + 1, len(cids)):
-                key = (min(cids[i], cids[j]), max(cids[i], cids[j]))
-                all_shared.extend(edge_ngrams.get(key, []))
-
-        if not all_shared:
-            continue
-
-        counts = Counter(all_shared)
-        label = max(counts, key=lambda ng: counts[ng] * (1 + ng.count(' ')))
-
+        label = _group_label([headline_by_id[cid] for cid in component])
         group_id = str(uuid.uuid4())
+
         conn.execute(
             "INSERT INTO cluster_groups (id, label, created_at, updated_at) VALUES (?, ?, ?, ?)",
             (group_id, label, now, now),
