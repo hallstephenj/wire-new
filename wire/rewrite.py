@@ -120,12 +120,17 @@ def _parse_rewrite_response(text, clusters, conn):
                        (category, cluster["id"]))
             recats += 1
 
-        # Write market_mover score and ticker to curation_overrides
-        conn.execute("""
-            INSERT INTO curation_overrides (cluster_id, market_mover, market_ticker, updated_at)
-            VALUES (?, ?, ?, datetime('now'))
-            ON CONFLICT(cluster_id) DO UPDATE SET market_mover=?, market_ticker=?, updated_at=datetime('now')
-        """, (cluster["id"], market_mover, market_ticker, market_mover, market_ticker))
+        # Write market_mover score and ticker to curation_overrides.
+        # Use INSERT OR IGNORE + UPDATE to avoid a FOREIGN KEY error if the
+        # cluster expired and was deleted between fetch and parse.
+        try:
+            conn.execute("""
+                INSERT INTO curation_overrides (cluster_id, market_mover, market_ticker, updated_at)
+                VALUES (?, ?, ?, datetime('now'))
+                ON CONFLICT(cluster_id) DO UPDATE SET market_mover=?, market_ticker=?, updated_at=datetime('now')
+            """, (cluster["id"], market_mover, market_ticker, market_mover, market_ticker))
+        except Exception as e:
+            log.warning(f"Could not write market_mover for cluster {cluster['id']}: {e}")
 
     return rewrites, recats
 
