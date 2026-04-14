@@ -44,7 +44,23 @@ def _coalesce_groups(stories: list) -> list:
     Each group floats to the position of its highest-ranked (first-encountered)
     member. Subsequent members are pulled from their original positions and
     inserted immediately after the previous group member.
+
+    Groups with only one member visible in this result set (pagination cutoff,
+    category filter, or expiry between grouping run and API call) are dissolved
+    — their group_id is stripped so no solo group wrapper appears on the client.
     """
+    # Strip group membership for groups with fewer than 2 members in this page
+    group_counts: dict = {}
+    for story in stories:
+        gid = story.get("group_id")
+        if gid:
+            group_counts[gid] = group_counts.get(gid, 0) + 1
+    for story in stories:
+        gid = story.get("group_id")
+        if gid and group_counts.get(gid, 0) < 2:
+            story["group_id"] = None
+            story["group_label"] = None
+
     result = []
     placed: set = set()
     group_tail: dict = {}  # group_id → current insertion index in result
