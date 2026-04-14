@@ -961,7 +961,7 @@ function renderStoryList(stories, offset) {
             }
             const label = s.group_label ? esc(s.group_label) : 'RELATED';
             html += `<div class="story-group" data-group="${esc(s.group_id)}">`;
-            html += `<div class="group-label">RELATED · ${label}</div>`;
+            html += `<div class="group-label">TOPIC · ${label}</div>`;
             members.forEach(m => { html += renderStory(m); });
             html += `</div>`;
         } else {

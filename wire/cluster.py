@@ -510,7 +510,7 @@ def merge_existing_clusters(conn):
     algo = get_active_version()
     # TF-IDF pass uses a strong threshold — only near-identical wording
     # Embeddings handle the semantic/paraphrase cases in pass 2
-    merge_tfidf = max(algo.get("tfidf_threshold", 0.30), 0.40)
+    merge_tfidf = max(algo.get("tfidf_threshold", 0.30), 0.50)
 
     now = datetime.now(timezone.utc)
     rows = conn.execute(
@@ -589,7 +589,7 @@ def merge_existing_clusters(conn):
 
     headlines2 = [r["rewritten_headline"] or "" for r in rows2]
 
-    EMBED_THRESHOLD = 0.65  # semantic similarity threshold for merge
+    EMBED_THRESHOLD = 0.75  # semantic similarity threshold for merge
 
     try:
         model = _get_embed_model()
