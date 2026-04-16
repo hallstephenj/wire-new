@@ -207,6 +207,148 @@ feeds:
     - name: "Time"
       url: "https://time.com/feed/"
 
+  # ═══════════════════════════════════════════════════════════════════════
+  # BITCOIN WIRE — dedicated Bitcoin-only feeds
+  # These map directly to bitcoin-* categories in the Bitcoin Wire.
+  # Only Bitcoin-specific content — no altcoin publications.
+  # ═══════════════════════════════════════════════════════════════════════
+
+  bitcoin-markets:
+    # Primary Bitcoin financial media
+    - name: "Bitcoin Magazine"
+      url: "https://bitcoinmagazine.com/.rss/full/"
+    - name: "CoinDesk"
+      url: "https://www.coindesk.com/arc/outboundfeeds/rss/"
+    - name: "The Block"
+      url: "https://www.theblock.co/rss.xml"
+    - name: "Blockworks"
+      url: "https://blockworks.co/feed/"
+    - name: "Decrypt"
+      url: "https://decrypt.co/feed"
+    # General financial wire — Bitcoin price / ETF coverage
+    - name: "Bloomberg Markets"
+      url: "https://feeds.bloomberg.com/markets/news.rss"
+    - name: "Wall Street Journal"
+      url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"
+    - name: "CNBC Markets"
+      url: "https://www.cnbc.com/id/20910258/device/rss/rss.html"
+    - name: "Reuters Business"
+      url: "https://feeds.reuters.com/reuters/businessNews"
+    - name: "MarketWatch"
+      url: "https://www.marketwatch.com/rss/topstories"
+    # On-chain data publishers
+    - name: "Glassnode"
+      url: "https://insights.glassnode.com/rss/"
+    - name: "CryptoSlate"
+      url: "https://cryptoslate.com/feed/"
+
+  bitcoin-policy:
+    # Regulatory / legal Bitcoin news
+    - name: "Bitcoin Magazine"
+      url: "https://bitcoinmagazine.com/.rss/full/"
+    - name: "CoinDesk Policy"
+      url: "https://www.coindesk.com/arc/outboundfeeds/rss/category/policy/"
+    - name: "The Block"
+      url: "https://www.theblock.co/rss.xml"
+    - name: "Politico"
+      url: "https://www.politico.com/rss/politicopicks.xml"
+    - name: "The Hill"
+      url: "https://thehill.com/rss/syndicator/19109"
+    - name: "Reuters"
+      url: "https://feeds.reuters.com/reuters/topNews"
+    - name: "Bloomberg"
+      url: "https://feeds.bloomberg.com/technology/news.rss"
+    - name: "Axios"
+      url: "https://api.axios.com/feed/"
+    - name: "Coin Center"
+      url: "https://www.coincenter.org/feed/"
+
+  bitcoin-tech:
+    # Protocol, Lightning Network, developer news
+    - name: "Bitcoin Magazine"
+      url: "https://bitcoinmagazine.com/.rss/full/"
+    - name: "Bitcoin Optech"
+      url: "https://bitcoinops.org/en/newsletters/feed.xml"
+    - name: "CoinDesk"
+      url: "https://www.coindesk.com/arc/outboundfeeds/rss/"
+    - name: "The Block"
+      url: "https://www.theblock.co/rss.xml"
+    - name: "Blockstream"
+      url: "https://blog.blockstream.com/index.xml"
+    - name: "Lightning Labs"
+      url: "https://lightning.engineering/posts/index.xml"
+    - name: "Spiral"
+      url: "https://spiral.xyz/blog/feed.xml"
+    - name: "Ars Technica"
+      url: "https://feeds.arstechnica.com/arstechnica/index"
+    - name: "The Verge"
+      url: "https://www.theverge.com/rss/index.xml"
+    - name: "Wired"
+      url: "https://www.wired.com/feed/rss"
+
+  bitcoin-mining:
+    # Mining, hashrate, energy, hardware
+    - name: "Bitcoin Magazine"
+      url: "https://bitcoinmagazine.com/.rss/full/"
+    - name: "CoinDesk"
+      url: "https://www.coindesk.com/arc/outboundfeeds/rss/"
+    - name: "The Block"
+      url: "https://www.theblock.co/rss.xml"
+    - name: "Blockworks"
+      url: "https://blockworks.co/feed/"
+    - name: "Decrypt"
+      url: "https://decrypt.co/feed"
+    - name: "Fortune"
+      url: "https://fortune.com/feed/fortune-feeds/?id=3689511"
+    - name: "Reuters Business"
+      url: "https://feeds.reuters.com/reuters/businessNews"
+
+  bitcoin-macro:
+    # Macro economics, inflation, Bitcoin as reserve asset
+    - name: "Bitcoin Magazine"
+      url: "https://bitcoinmagazine.com/.rss/full/"
+    - name: "Unchained"
+      url: "https://unchained.com/blog/feed/"
+    - name: "River"
+      url: "https://river.com/learn/feed/"
+    - name: "Swan Bitcoin"
+      url: "https://www.swanbitcoin.com/feed/"
+    - name: "10x Research"
+      url: "https://www.10xresearch.co/feed"
+    - name: "The Block"
+      url: "https://www.theblock.co/rss.xml"
+    - name: "Bloomberg Markets"
+      url: "https://feeds.bloomberg.com/markets/news.rss"
+    - name: "Wall Street Journal"
+      url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml"
+    - name: "Financial Times"
+      url: "https://www.ft.com/markets?format=rss"
+    - name: "The Economist"
+      url: "https://www.economist.com/finance-and-economics/rss.xml"
+    - name: "Axios"
+      url: "https://api.axios.com/feed/"
+
+  bitcoin-culture:
+    # Bitcoin community, philosophy, adoption stories
+    - name: "Bitcoin Magazine"
+      url: "https://bitcoinmagazine.com/.rss/full/"
+    - name: "Unchained"
+      url: "https://unchained.com/blog/feed/"
+    - name: "River"
+      url: "https://river.com/learn/feed/"
+    - name: "Swan Bitcoin"
+      url: "https://www.swanbitcoin.com/feed/"
+    - name: "Decrypt"
+      url: "https://decrypt.co/feed"
+    - name: "CoinDesk"
+      url: "https://www.coindesk.com/arc/outboundfeeds/rss/"
+    - name: "The Block"
+      url: "https://www.theblock.co/rss.xml"
+    - name: "Wired"
+      url: "https://www.wired.com/feed/rss"
+    - name: "The Atlantic"
+      url: "https://feeds.feedburner.com/AtlanticScienceAndTechnology"
+
   world:
     # #47 South China Morning Post (0.21%)
     - name: "South China Morning Post"

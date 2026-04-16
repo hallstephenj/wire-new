@@ -1,0 +1,1087 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+<title>BITCOIN WIRE</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" media="print" onload="this.media='all'">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+    --btc: #F7931A;
+    --btc-dim: rgba(247,147,26,0.08);
+    --btc-mid: rgba(247,147,26,0.5);
+    --green: #3a9e5a;
+    --red: #c0392b;
+    --ink: #cccccc;
+    --ink-dim: #666;
+    --ink-mute: #444;
+    --ink-faint: #333;
+    --ink-ghost: #222;
+    --ink-void: #1a1a1a;
+    --bg: #0a0a0a;
+    --bg-raise: #111;
+    --border: #1e1e1e;
+    --border-mid: #2a2a2a;
+    --border-dim: #333;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 13px;
+    line-height: 1.35;
+    -webkit-font-smoothing: antialiased;
+}
+
+#app {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 16px 20px;
+}
+
+/* ── Header ───────────────────────────────────────────────────────── */
+header {
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--border-mid);
+    padding-bottom: 12px;
+}
+
+.header-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.logo-group {
+    display: flex;
+    align-items: baseline;
+    gap: 0;
+}
+
+.logo-btc {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--btc);
+    letter-spacing: 4px;
+}
+
+.logo-wire {
+    font-size: 24px;
+    font-weight: 700;
+    color: #444;
+    letter-spacing: 4px;
+}
+
+.cursor {
+    animation: blink 1s step-end infinite;
+    color: var(--btc);
+}
+
+@keyframes blink { 50% { opacity: 0; } }
+
+.live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background: var(--green);
+    border-radius: 50%;
+    margin-left: 12px;
+    animation: pulse 2s ease-in-out infinite;
+    vertical-align: middle;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(58,158,90,0.7); }
+    50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(58,158,90,0); }
+}
+
+/* ── Price widget ─────────────────────────────────────────────────── */
+.price-widget {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 12px;
+}
+
+.btc-price {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--btc);
+    letter-spacing: 0.5px;
+}
+
+.btc-price.loading { color: var(--ink-dim); font-weight: 400; font-size: 12px; }
+
+.btc-change {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: 2px;
+}
+
+.btc-change.up   { color: var(--green); background: rgba(58,158,90,0.1); }
+.btc-change.down { color: var(--red);   background: rgba(192,57,43,0.1); }
+.btc-change.flat { color: var(--ink-dim); background: transparent; }
+
+.price-sep { color: var(--border-mid); }
+
+.halving-badge {
+    font-size: 10px;
+    color: var(--ink-dim);
+    letter-spacing: 0.5px;
+}
+
+.halving-badge strong {
+    color: var(--ink);
+    font-weight: 700;
+}
+
+.halving-badge .hl-days {
+    color: var(--btc);
+    font-weight: 700;
+}
+
+/* ── Controls ─────────────────────────────────────────────────────── */
+.controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.tabs {
+    display: flex;
+    gap: 2px;
+}
+
+.tab {
+    padding: 4px 10px;
+    cursor: pointer;
+    color: var(--ink-dim);
+    border: 1px solid var(--border-dim);
+    background: transparent;
+    font-family: inherit;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.tab:hover { color: var(--ink); border-color: #555; }
+.tab.active { color: var(--btc); border-color: var(--btc); background: var(--btc-dim); }
+
+.separator { color: var(--border-dim); }
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-left: auto;
+}
+
+.nav-links a {
+    color: var(--ink-dim);
+    text-decoration: none;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    transition: color 0.15s;
+}
+
+.nav-links a:hover { color: var(--ink); }
+.nav-links span { color: var(--border-dim); }
+
+/* ── Stories ──────────────────────────────────────────────────────── */
+#stories { padding-top: 4px; }
+
+.story {
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    animation: fadeIn 0.4s ease;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.story-body { flex: 1; min-width: 0; }
+
+/* ── Phosphor dot ────────────────────────────────────────────────── */
+.wire-ball {
+    --energy: 0;
+    --size: 6px;
+    --a: calc(0.15 + var(--energy) * 0.85);
+    --bloom: calc(var(--energy) * 10px);
+    --bloom2: calc(var(--energy) * 22px);
+    width: var(--size);
+    height: var(--size);
+    min-width: 6px;
+    min-height: 6px;
+    border-radius: 50%;
+    margin-top: 6px;
+    flex-shrink: 0;
+    background: rgba(247, 147, 26, var(--a));
+    box-shadow:
+        0 0 2px rgba(247, 147, 26, var(--a)),
+        0 0 var(--bloom) rgba(247, 120, 10, calc(var(--a) * 0.5)),
+        0 0 var(--bloom2) rgba(247, 100, 0, calc(var(--a) * 0.15));
+    animation: phosphor 4s ease-in-out infinite;
+    position: relative;
+}
+
+.wire-ball::after {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: 50%;
+    border: 1px solid rgba(247, 147, 26, calc(var(--energy) * 0.3));
+}
+
+.wire-ball.scoop {
+    --size: 7px;
+    background: rgba(255, 180, 60, var(--a));
+    box-shadow:
+        0 0 3px rgba(255, 180, 60, var(--a)),
+        0 0 8px rgba(247, 147, 26, calc(var(--a) * 0.7)),
+        0 0 20px rgba(247, 120, 10, calc(var(--a) * 0.3));
+    animation: phosphorScoop 2s ease-in-out infinite;
+}
+
+.wire-ball.scoop::after {
+    border-color: rgba(255, 180, 60, calc(var(--energy) * 0.5));
+}
+
+@keyframes phosphor { 0%, 100% { opacity: 0.8; } 50% { opacity: 1; } }
+@keyframes phosphorScoop {
+    0%, 100% { opacity: 0.7; filter: brightness(1); }
+    50%       { opacity: 1;   filter: brightness(1.15); }
+}
+
+/* ── Story content ────────────────────────────────────────────────── */
+.story-main {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.headline a {
+    color: var(--btc);
+    text-decoration: none;
+    font-size: 13px;
+}
+
+.headline a:hover { text-decoration: underline; }
+
+.meta { font-size: 11px; white-space: nowrap; }
+
+.source { color: var(--green); }
+.count  { color: var(--green); margin-left: 4px; }
+
+.cat-badge {
+    font-size: 9px;
+    color: var(--btc-mid);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    border: 1px solid rgba(247,147,26,0.2);
+    padding: 0 4px;
+    line-height: 1.6;
+    flex-shrink: 0;
+}
+
+.timestamp {
+    font-size: 10px;
+    color: #3a3a3a;
+    margin-left: 6px;
+    white-space: nowrap;
+}
+
+.also {
+    font-size: 11px;
+    color: #444;
+    padding-left: 16px;
+    margin-top: 1px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+
+.also a { color: #555; text-decoration: none; }
+.also a:hover { color: #888; text-decoration: underline; }
+
+.expand-btn {
+    background: none;
+    border: 1px solid var(--border-dim);
+    color: #555;
+    font-family: inherit;
+    font-size: 9px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+
+.expand-btn:hover { color: #999; border-color: #555; }
+
+.items-detail {
+    padding-left: 16px;
+    margin-top: 4px;
+    display: none;
+}
+
+.items-detail.open { display: block; }
+
+.item-row {
+    font-size: 11px;
+    padding: 2px 0;
+    border-bottom: 1px solid #0f0f0f;
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+}
+
+.item-row a { color: #888; text-decoration: none; }
+.item-row a:hover { color: var(--ink); text-decoration: underline; }
+
+.item-source { color: var(--green); font-size: 10px; white-space: nowrap; flex-shrink: 0; }
+.item-time   { color: var(--border-dim); font-size: 10px; white-space: nowrap; flex-shrink: 0; }
+
+/* ── Related groups ───────────────────────────────────────────────── */
+.story-group {
+    border-left: 2px solid rgba(247,147,26,0.15);
+    margin: 4px 0;
+    padding-left: 10px;
+}
+
+.story-group .story            { border-bottom: 1px solid #161616; }
+.story-group .story:last-child { border-bottom: 1px solid var(--border); }
+
+.group-label {
+    font-size: 8px;
+    color: #3a3a3a;
+    letter-spacing: 2px;
+    padding: 4px 0 2px;
+    text-transform: uppercase;
+}
+
+/* ── Status bar ───────────────────────────────────────────────────── */
+.status-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg);
+    border-top: 1px solid var(--border-void, #1a1a1a);
+    padding: 4px 20px;
+    font-size: 10px;
+    color: var(--ink-mute);
+    display: flex;
+    justify-content: space-between;
+}
+
+/* ── Load more ────────────────────────────────────────────────────── */
+#load-more { display: none; text-align: center; padding: 12px 0; }
+
+#load-more button {
+    background: transparent;
+    border: 1px solid var(--border-dim);
+    color: var(--ink-dim);
+    font-family: inherit;
+    font-size: 11px;
+    padding: 6px 20px;
+    cursor: pointer;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+#load-more button:hover { color: var(--ink); border-color: #555; }
+
+.loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--ink-mute);
+}
+
+/* ── Boot overlay ─────────────────────────────────────────────────── */
+#boot-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+}
+
+#boot-overlay.hidden { display: none; }
+
+.boot-logo {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: 5px;
+}
+
+.boot-logo .boot-btc  { color: var(--btc); }
+.boot-logo .boot-wire { color: #444; }
+
+.boot-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 340px;
+}
+
+.boot-step             { color: var(--border-dim); font-size: 12px; transition: color 0.3s; }
+.boot-step.active      { color: var(--ink); }
+.boot-step.done        { color: var(--green); }
+
+.boot-step-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+}
+
+.boot-icon { width: 18px; text-align: center; flex-shrink: 0; }
+
+.boot-step .boot-detail {
+    color: #555;
+    margin-left: auto;
+    font-size: 11px;
+}
+
+.boot-bar-track {
+    width: 100%;
+    height: 4px;
+    background: var(--border-void, #1a1a1a);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.boot-bar-fill           { height: 100%; width: 0%; border-radius: 2px; transition: width 0.4s ease; }
+.boot-step.active .boot-bar-fill { background: var(--btc); }
+.boot-step.done   .boot-bar-fill { background: var(--green); width: 100% !important; }
+.boot-step:not(.active):not(.done) .boot-bar-track { background: #111; }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.spinner {
+    display: inline-block;
+    width: 12px; height: 12px;
+    border: 2px solid var(--btc);
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+}
+
+#boot-enter {
+    display: none;
+    background: transparent;
+    border: 1px solid var(--btc);
+    color: var(--btc);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px 28px;
+    cursor: pointer;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    transition: background 0.2s;
+}
+
+#boot-enter:hover { background: var(--btc-dim); }
+
+/* ── Mobile ───────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+    body { font-size: 12px; }
+    #app { padding: 12px 12px; }
+
+    .header-top {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .price-widget {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+
+    .logo-btc, .logo-wire { font-size: 20px; letter-spacing: 3px; }
+
+    .controls {
+        width: 100%;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+
+    .nav-links { margin-left: 0; }
+    .separator { display: none; }
+
+    #cat-tabs {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        width: 100%;
+        flex-wrap: nowrap;
+    }
+    #cat-tabs::-webkit-scrollbar { display: none; }
+
+    .tab { padding: 6px 8px; font-size: 9px; letter-spacing: 0.5px; flex-shrink: 0; }
+
+    .story { padding: 8px 0; }
+    .story-main { flex-direction: column; gap: 3px; }
+    .headline a { font-size: 12px; line-height: 1.4; word-break: break-word; }
+    .meta       { font-size: 10px; white-space: normal; }
+    .also       { padding-left: 0; font-size: 10px; }
+    .timestamp  { font-size: 9px; }
+    .halving-badge { display: none; }
+}
+
+@media (max-width: 400px) {
+    body { font-size: 11px; }
+    #app { padding: 10px 8px; }
+    .logo-btc, .logo-wire { font-size: 17px; }
+    .tab { padding: 5px 7px; font-size: 8px; }
+    .headline a { font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ── Boot overlay ─────────────────────────────────────────────────── -->
+<div id="boot-overlay">
+    <div class="boot-logo">
+        <span class="boot-btc">BITCOIN</span><span class="boot-wire">WIRE</span>
+    </div>
+    <div class="boot-steps">
+        <div class="boot-step" id="step-feeds">
+            <div class="boot-step-header">
+                <span class="boot-icon" id="icon-feeds">○</span>
+                <span>Ingesting Bitcoin feeds</span>
+                <span class="boot-detail" id="detail-feeds"></span>
+            </div>
+            <div class="boot-bar-track"><div class="boot-bar-fill" id="bar-feeds"></div></div>
+        </div>
+        <div class="boot-step" id="step-clustering">
+            <div class="boot-step-header">
+                <span class="boot-icon" id="icon-clustering">○</span>
+                <span>Building story clusters</span>
+                <span class="boot-detail" id="detail-clustering"></span>
+            </div>
+            <div class="boot-bar-track"><div class="boot-bar-fill" id="bar-clustering"></div></div>
+        </div>
+        <div class="boot-step" id="step-rewriting">
+            <div class="boot-step-header">
+                <span class="boot-icon" id="icon-rewriting">○</span>
+                <span>Rewriting headlines</span>
+                <span class="boot-detail" id="detail-rewriting"></span>
+            </div>
+            <div class="boot-bar-track"><div class="boot-bar-fill" id="bar-rewriting"></div></div>
+        </div>
+    </div>
+    <button id="boot-enter">ENTER BITCOIN WIRE</button>
+</div>
+
+<!-- ── Main app ──────────────────────────────────────────────────────── -->
+<div id="app">
+    <header>
+        <div class="header-top">
+            <div class="logo-group">
+                <span class="logo-btc">BITCOIN</span><span class="logo-wire">WIRE</span><span class="cursor">▌</span>
+                <span class="live-dot"></span>
+            </div>
+            <div class="price-widget">
+                <span class="btc-price loading" id="btc-price">loading…</span>
+                <span class="btc-change flat" id="btc-change"></span>
+                <span class="price-sep">│</span>
+                <span class="halving-badge" id="halving-badge">halving: —</span>
+            </div>
+        </div>
+        <div class="controls">
+            <div class="tabs" id="sort-tabs">
+                <button class="tab active" data-sort="hot">TOP</button>
+                <button class="tab" data-sort="new">TICKER</button>
+            </div>
+            <span class="separator">│</span>
+            <div class="tabs" id="cat-tabs">
+                <button class="tab active" data-cat="all">ALL</button>
+                <button class="tab" data-cat="markets">MARKETS</button>
+                <button class="tab" data-cat="policy">POLICY</button>
+                <button class="tab" data-cat="tech">TECH</button>
+                <button class="tab" data-cat="mining">MINING</button>
+                <button class="tab" data-cat="macro">MACRO</button>
+                <button class="tab" data-cat="culture">CULTURE</button>
+            </div>
+            <span class="separator">│</span>
+            <div class="nav-links">
+                <a href="/" title="Main Wire">WIRE</a>
+                <span>│</span>
+                <a href="/settings">SETTINGS</a>
+                <span>│</span>
+                <button onclick="doLogout()" style="background:transparent;border:none;color:var(--ink-dim);font-family:inherit;font-size:11px;cursor:pointer;letter-spacing:1px;text-transform:uppercase;padding:0;">LOGOUT</button>
+            </div>
+        </div>
+    </header>
+
+    <div id="stories"><div class="loading">Connecting to Bitcoin Wire...</div></div>
+    <div id="load-more"><button onclick="loadMore()">Show older Bitcoin stories</button></div>
+</div>
+
+<footer style="max-width:900px;margin:40px auto 0;padding:0 20px 60px;border-top:1px solid #1a1a1a;text-align:center;">
+    <div style="padding-top:16px;font-size:11px;color:#444;display:flex;justify-content:center;gap:16px;flex-wrap:wrap;">
+        <a href="/" style="color:#555;text-decoration:none;">Edrowire</a>
+        <a href="/about" style="color:#555;text-decoration:none;">About</a>
+        <a href="/contact" style="color:#555;text-decoration:none;">Contact</a>
+        <a href="/privacy" style="color:#555;text-decoration:none;">Privacy Policy</a>
+        <a href="/terms" style="color:#555;text-decoration:none;">Terms of Service</a>
+    </div>
+    <div style="margin-top:10px;font-size:10px;color:#333;">&copy; 2026 Substantive Systems, LLC. All rights reserved.</div>
+</footer>
+
+<div class="status-bar">
+    <span id="status-total">—</span>
+    <span id="status-updated">—</span>
+</div>
+
+<script>
+/* ── Auth ────────────────────────────────────────────────────────────── */
+function doLogout() {
+    document.cookie = 'sb-access-token=; Max-Age=0; path=/; SameSite=Lax';
+    window.location.href = '/login';
+}
+
+/* ── Config ──────────────────────────────────────────────────────────── */
+const PAGE_SIZE = 20;
+let currentSort   = 'hot';
+let currentCat    = 'all';
+let currentOffset = 0;
+let knownIds      = new Set();
+
+/* ── Boot overlay ────────────────────────────────────────────────────── */
+// Bitcoin wire piggybacks on the main wire's boot sequence.
+// We map the main phases into our 3 simplified steps.
+const PHASE_MAP = {
+    reference_check: 'feeds',
+    polling:         'feeds',
+    clustering:      'clustering',
+    rewriting:       'rewriting',
+    ready:           'ready',
+};
+
+function updateBootUI(state) {
+    const phase = state.phase;
+    const mapped = PHASE_MAP[phase] || 'feeds';
+    const steps = ['feeds', 'clustering', 'rewriting'];
+    const idx = steps.indexOf(mapped);
+
+    steps.forEach((step, i) => {
+        const el     = document.getElementById('step-' + step);
+        const icon   = document.getElementById('icon-' + step);
+        const bar    = document.getElementById('bar-' + step);
+        const detail = document.getElementById('detail-' + step);
+
+        el.className = 'boot-step';
+
+        if (phase === 'ready' || i < idx) {
+            el.classList.add('done');
+            icon.innerHTML = '✓';
+            bar.style.width = '100%';
+            detail.textContent = '100%';
+        } else if (i === idx) {
+            el.classList.add('active');
+            icon.innerHTML = '<span class="spinner"></span>';
+            let pct = 0;
+            if (step === 'feeds') {
+                pct = Math.round(((state.reference_progress || 0) * 0.3 + (state.polling_progress || 0) * 0.7) * 100);
+                detail.textContent = state.detail ? `${state.detail} · ${pct}%` : `${pct}%`;
+            } else if (step === 'clustering') {
+                pct = Math.round((state.clustering_progress || 0) * 100);
+                detail.textContent = state.clusters ? `${state.clusters} clusters · ${pct}%` : `${pct}%`;
+            } else if (step === 'rewriting') {
+                pct = Math.round((state.rewriting_progress || 0) * 100);
+                detail.textContent = state.pending ? `${state.pending} pending · ${pct}%` : `${pct}%`;
+            }
+            bar.style.width = pct + '%';
+        } else {
+            icon.innerHTML = '○';
+            bar.style.width = '0%';
+            detail.textContent = '';
+        }
+    });
+
+    if (phase === 'ready') {
+        document.getElementById('boot-enter').style.display = 'inline-block';
+    }
+}
+
+async function bootCheck() {
+    try {
+        const resp = await fetch('/api/boot-status');
+        const state = await resp.json();
+
+        if (state.phase === 'ready') {
+            document.getElementById('boot-overlay').classList.add('hidden');
+            initApp();
+            return;
+        }
+
+        updateBootUI(state);
+        const poll = setInterval(async () => {
+            try {
+                const r = await fetch('/api/boot-status');
+                const s = await r.json();
+                updateBootUI(s);
+                if (s.phase === 'ready') {
+                    clearInterval(poll);
+                    setTimeout(() => {
+                        document.getElementById('boot-overlay').classList.add('hidden');
+                        initApp();
+                    }, 1200);
+                }
+            } catch (_) {}
+        }, 2000);
+    } catch (_) {
+        setTimeout(bootCheck, 2000);
+    }
+}
+
+document.getElementById('boot-enter').addEventListener('click', () => {
+    document.getElementById('boot-overlay').classList.add('hidden');
+    initApp();
+});
+
+/* ── Price & halving ─────────────────────────────────────────────────── */
+function formatPrice(n) {
+    if (!n) return '—';
+    return '$' + Math.round(n).toLocaleString('en-US');
+}
+
+function formatChange(pct) {
+    if (pct == null) return { text: '', cls: 'flat' };
+    const sign = pct >= 0 ? '+' : '';
+    const cls  = pct >= 0.05 ? 'up' : pct <= -0.05 ? 'down' : 'flat';
+    return { text: `${sign}${pct.toFixed(2)}%`, cls };
+}
+
+async function refreshPrice() {
+    try {
+        const res = await fetch('/api/bitcoin/price');
+        if (!res.ok) return;
+        const d = await res.json();
+
+        const priceEl  = document.getElementById('btc-price');
+        const changeEl = document.getElementById('btc-change');
+
+        priceEl.textContent = formatPrice(d.price);
+        priceEl.className   = 'btc-price';
+
+        const ch = formatChange(d.change_24h);
+        changeEl.textContent = ch.text;
+        changeEl.className   = `btc-change ${ch.cls}`;
+    } catch (_) {}
+}
+
+async function refreshHalving() {
+    try {
+        const res = await fetch('/api/bitcoin/halving');
+        if (!res.ok) return;
+        const d = await res.json();
+        const el = document.getElementById('halving-badge');
+
+        if (d.days_remaining != null && d.days_remaining > 0) {
+            const days = Math.ceil(d.days_remaining);
+            const blk  = (d.blocks_remaining || 0).toLocaleString('en-US');
+            el.innerHTML = `halving: <strong>${blk}</strong> blocks · <span class="hl-days">${days}d</span>`;
+        } else if (d.days_remaining != null && d.days_remaining <= 0) {
+            el.innerHTML = `halving: <span class="hl-days">imminent</span>`;
+        }
+    } catch (_) {}
+}
+
+/* ── Tab controls ────────────────────────────────────────────────────── */
+document.querySelectorAll('#sort-tabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#sort-tabs .tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentSort = btn.dataset.sort;
+        currentOffset = 0;
+        knownIds.clear();
+        _lastStoryData.clear();
+        fetchStories();
+    });
+});
+
+document.querySelectorAll('#cat-tabs .tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('#cat-tabs .tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentCat = btn.dataset.cat;
+        currentOffset = 0;
+        knownIds.clear();
+        _lastStoryData.clear();
+        fetchStories();
+    });
+});
+
+/* ── Helpers ─────────────────────────────────────────────────────────── */
+function formatTime(iso) {
+    if (!iso) return '';
+    const d    = new Date(iso);
+    const now  = new Date();
+    const diffMs  = now - d;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHr  = Math.floor(diffMs / 3600000);
+    const diffDay = Math.floor(diffMs / 86400000);
+    if (diffMin < 1)  return 'just now';
+    if (diffMin < 60) return `${diffMin}m ago`;
+    if (diffHr < 24)  return `${diffHr}h ago`;
+    if (diffDay < 7)  return `${diffDay}d ago`;
+    const mon = d.toLocaleString('en', { month: 'short' });
+    return `${mon} ${d.getDate()}`;
+}
+
+function formatFullDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleString('en-US', {
+        month: 'short', day: 'numeric', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false
+    });
+}
+
+const BTC_TIER1 = new Set([
+    'reuters', 'ap', 'associated press', 'bloomberg', 'financial times', 'ft',
+    'wall street journal', 'wsj', 'the new york times', 'nyt',
+    'bitcoin magazine', 'coindesk', 'unchained', 'the block',
+    'cointelegraph', 'decrypt', 'block works', 'blockworks',
+    'river', 'swan bitcoin', '10x research', 'glassnode', 'nydig',
+]);
+
+function wireEnergy(s) {
+    try {
+        const allNames     = [s.source, ...(s.other_sources || []).map(o => o.name)].filter(Boolean);
+        const uniqueHls    = new Set((s.items || []).map(i => i.headline)).size || 1;
+        const coverage     = Math.min(uniqueHls, 12) / 12;
+        const t1           = allNames.filter(n => n && BTC_TIER1.has(n.toLowerCase())).length;
+        const quality      = Math.min(t1, 4) / 4;
+        const ts           = s.published_at || s.first_seen;
+        const hoursOld     = ts ? Math.max(0, (Date.now() - new Date(ts).getTime()) / 3600000) : 48;
+        const recency      = Math.max(0, 1 - hoursOld / 72);
+        const raw          = (coverage * 0.55 + quality * 0.45) * (0.15 + recency * 0.85);
+        return Math.min(1, Math.max(0, raw));
+    } catch (_) { return 0; }
+}
+
+function esc(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+}
+
+function toggleItems(id) {
+    const el = document.getElementById('items-' + id);
+    if (!el) return;
+    const isOpen = el.classList.toggle('open');
+    const btn    = el.closest('.story').querySelector('.expand-btn');
+    if (btn) {
+        if (isOpen) { btn.dataset.label = btn.textContent; btn.textContent = '−'; }
+        else        { btn.textContent = btn.dataset.label || '+'; }
+    }
+}
+
+/* ── Story rendering ─────────────────────────────────────────────────── */
+function renderStory(s) {
+    const shownSources = (s.other_sources || []).slice(0, 3).map(o =>
+        `<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`
+    ).join(' · ');
+
+    const hasItems  = s.items && s.items.length > 1;
+    const expandBtn = hasItems
+        ? `<button class="expand-btn" onclick="toggleItems('${s.id}')">${s.items.length > 0 ? `+${s.items.length} more` : '+'}</button>`
+        : '';
+    const alsoLine  = shownSources
+        ? `<div class="also">also: ${shownSources} ${expandBtn}</div>`
+        : '';
+
+    let itemsDetail = '';
+    if (hasItems) {
+        const rows = s.items.map(it =>
+            `<div class="item-row"><span class="item-source">${esc(it.source)}</span><a href="${esc(it.url)}" target="_blank" rel="noopener">${esc(it.headline)}</a><span class="item-time">${esc(formatTime(it.published_at))}</span></div>`
+        ).join('');
+        itemsDetail = `<div class="items-detail" id="items-${s.id}">${rows}</div>`;
+    }
+
+    const timeAgo  = formatTime(s.published_at || s.first_seen);
+    const fullDate = formatFullDate(s.published_at || s.first_seen);
+    const displayHeadline = (currentSort === 'new' && s.original_headline) ? s.original_headline : s.headline;
+    const energy   = wireEnergy(s);
+    const ballClass = s.scoop ? 'wire-ball scoop' : 'wire-ball';
+
+    // Category badge — only shown when viewing ALL
+    const catDisplay = (s.category || '').replace(/^bitcoin-/, '').toUpperCase();
+    const catBadge   = (currentCat === 'all' && catDisplay && catDisplay !== 'MARKETS')
+        ? `<span class="cat-badge">${esc(catDisplay)}</span>`
+        : '';
+
+    return `<div class="story" data-id="${s.id}">
+        <div class="${ballClass}" style="--energy:${energy.toFixed(3)}"></div>
+        <div class="story-body">
+            <div class="story-main">
+                <span class="headline"><a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(displayHeadline)}</a></span>
+                ${catBadge}
+                <span class="meta"><span class="source">via ${esc(s.source)}</span><span class="timestamp" title="${esc(fullDate)}">${esc(timeAgo)}</span></span>
+            </div>
+            ${alsoLine}
+            ${itemsDetail}
+        </div>
+    </div>`;
+}
+
+function renderStoryList(stories, offset) {
+    let html = '';
+    let i = 0;
+    while (i < stories.length) {
+        const s = stories[i];
+        if (s.group_id) {
+            const members = [s];
+            while (i + 1 < stories.length && stories[i + 1].group_id === s.group_id) {
+                i++;
+                members.push(stories[i]);
+            }
+            const label = s.group_label ? esc(s.group_label) : 'RELATED';
+            html += `<div class="story-group" data-group="${esc(s.group_id)}">`;
+            html += `<div class="group-label">TOPIC · ${label}</div>`;
+            members.forEach(m => { html += renderStory(m); });
+            html += `</div>`;
+        } else {
+            html += renderStory(s);
+        }
+        i++;
+    }
+    return html;
+}
+
+/* ── Differential update ─────────────────────────────────────────────── */
+let _lastStoryData = new Map();
+
+function _storyChanged(oldS, newS) {
+    return oldS.headline !== newS.headline
+        || oldS.source_count !== newS.source_count
+        || (oldS.group_id || null) !== (newS.group_id || null)
+        || (oldS.other_sources || []).length !== (newS.other_sources || []).length;
+}
+
+function _applyDiff(container, stories) {
+    const newIds   = stories.map(s => s.id);
+    const oldNodes = container.querySelectorAll('.story[data-id]');
+    const oldIdList = Array.from(oldNodes).map(n => n.dataset.id);
+
+    const orderMatch = newIds.length === oldIdList.length && newIds.every((id, i) => id === oldIdList[i]);
+
+    if (!orderMatch) {
+        container.innerHTML = renderStoryList(stories, currentOffset);
+    } else {
+        stories.forEach((s, i) => {
+            const oldData = _lastStoryData.get(s.id);
+            if (oldData && !_storyChanged(oldData, s)) return;
+            const node = oldNodes[i];
+            if (node) {
+                const wrapper   = document.createElement('div');
+                wrapper.innerHTML = renderStory(s);
+                const newNode   = wrapper.firstElementChild;
+                newNode.style.animation = 'none';
+                node.replaceWith(newNode);
+            }
+        });
+    }
+
+    _lastStoryData.clear();
+    stories.forEach(s => _lastStoryData.set(s.id, s));
+}
+
+/* ── Fetch stories ───────────────────────────────────────────────────── */
+let _refreshTimer = null;
+
+async function fetchStories(append) {
+    try {
+        const url = `/api/bitcoin/stories?sort=${currentSort}&category=${currentCat}&limit=${PAGE_SIZE}&offset=${currentOffset}`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+
+        const container = document.getElementById('stories');
+
+        if (append) {
+            container.insertAdjacentHTML('beforeend', renderStoryList(data.stories, currentOffset));
+            data.stories.forEach(s => _lastStoryData.set(s.id, s));
+        } else if (!data.stories.length) {
+            container.innerHTML = '<div class="loading">No Bitcoin stories yet — feeds are ingesting. This page refreshes automatically.</div>';
+            _lastStoryData.clear();
+        } else if (_lastStoryData.size > 0 && currentOffset === 0) {
+            _applyDiff(container, data.stories);
+        } else {
+            container.innerHTML = renderStoryList(data.stories, currentOffset);
+            _lastStoryData.clear();
+            data.stories.forEach(s => _lastStoryData.set(s.id, s));
+        }
+
+        const newIds = new Set(data.stories.map(s => s.id));
+        if (!append) knownIds = newIds;
+        else newIds.forEach(id => knownIds.add(id));
+
+        const loadMoreEl = document.getElementById('load-more');
+        loadMoreEl.style.display = (currentOffset + data.stories.length < data.total) ? 'block' : 'none';
+
+        document.getElementById('status-total').textContent   = `${data.total} bitcoin stories`;
+        document.getElementById('status-updated').textContent = `updated ${new Date(data.updated_at).toLocaleTimeString()}`;
+
+        if (!_refreshTimer) {
+            _refreshTimer = setInterval(() => { if (currentOffset === 0) fetchStories(); }, 30000);
+        }
+    } catch (e) {
+        console.error('Bitcoin Wire fetch error:', e);
+        const container = document.getElementById('stories');
+        if (container.querySelector('.loading')) {
+            container.innerHTML = '<div class="loading">Loading Bitcoin stories... retrying shortly.</div>';
+        }
+        setTimeout(() => fetchStories(), 5000);
+    }
+}
+
+function loadMore() {
+    currentOffset += PAGE_SIZE;
+    fetchStories(true);
+}
+
+/* ── Init ────────────────────────────────────────────────────────────── */
+function initApp() {
+    fetchStories();
+    refreshPrice();
+    refreshHalving();
+    // Refresh price every 60s, halving every 10 minutes
+    setInterval(refreshPrice,   60000);
+    setInterval(refreshHalving, 600000);
+}
+
+bootCheck();
+</script>
+</body>
+</html>

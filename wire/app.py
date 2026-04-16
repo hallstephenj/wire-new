@@ -24,6 +24,7 @@ from wire.scores import all_scores, get_score
 from wire.reference import run_reference_check, init_ref_http_client, close_ref_http_client
 from wire.algorithm import get_active_version, build_source_quality_case, build_reputable_sources_sql, build_hot_score_sql, build_market_mover_case_sql, list_versions, set_active_version
 from wire.group import assign_groups
+from wire.bitcoin import get_bitcoin_stories, get_btc_price, get_halving_info, bitcoin_search_sweep, rewrite_bitcoin_pending
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("wire")
@@ -246,6 +247,9 @@ async def _start_scheduler_after_boot():
     scheduler.add_job(cleanup_expired, "interval", hours=cfg["polling"]["cleanup_interval_hours"], id="cleanup")
     scheduler.add_job(run_reference_check, "cron", hour=6, id="reference_check")
     scheduler.add_job(deduplicate_clusters, "interval", minutes=30, id="dedup")
+    # Bitcoin Wire — dedicated sweep and rewrite jobs
+    scheduler.add_job(bitcoin_search_sweep, "interval", minutes=cfg["polling"]["search_interval_minutes"], id="btc_search", next_run_time=datetime.now(timezone.utc))
+    scheduler.add_job(rewrite_bitcoin_pending, "interval", minutes=15, id="btc_rewrite", next_run_time=datetime.now(timezone.utc))
     if not scheduler.running:
         scheduler.start()
     log.info("Scheduler started (post-boot)")
@@ -313,6 +317,7 @@ _REGISTER_HTML = (_TEMPLATES_DIR / "register.html").read_text()
 _AUTH_CALLBACK_HTML = (_TEMPLATES_DIR / "auth_callback.html").read_text()
 _ONBOARDING_HTML = (_TEMPLATES_DIR / "onboarding.html").read_text()
 _SETTINGS_HTML = (_TEMPLATES_DIR / "settings.html").read_text()
+_BITCOIN_HTML = (_TEMPLATES_DIR / "bitcoin.html").read_text()
 
 ONBOARDING_PRESETS = {
     "tech":     ["tech"],
@@ -527,6 +532,38 @@ async def health():
     items = conn.execute("SELECT COUNT(*) as c FROM raw_items").fetchone()["c"]
     conn.close()
     return {"status": "ok", "clusters": clusters, "raw_items": items}
+
+@app.get("/bitcoin", response_class=HTMLResponse)
+async def bitcoin_page(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        return RedirectResponse(url="/login", status_code=302)
+    return HTMLResponse(_inject_supabase(_BITCOIN_HTML))
+
+@app.get("/api/bitcoin/stories")
+async def bitcoin_stories_api(
+    request: Request,
+    sort: str = Query("hot", pattern="^(hot|new)$"),
+    category: str = Query("all", pattern="^(all|markets|policy|tech|mining|macro|culture)$"),
+    since: str | None = None,
+    limit: int = Query(20, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+):
+    return await get_bitcoin_stories(request, sort=sort, category=category, since=since, limit=limit, offset=offset)
+
+@app.get("/api/bitcoin/price")
+async def bitcoin_price_api():
+    data = await get_btc_price()
+    response = JSONResponse(data)
+    response.headers["Cache-Control"] = "public, max-age=60, s-maxage=60"
+    return response
+
+@app.get("/api/bitcoin/halving")
+async def bitcoin_halving_api():
+    data = get_halving_info()
+    response = JSONResponse(data)
+    response.headers["Cache-Control"] = "public, max-age=300, s-maxage=300"
+    return response
 
 @app.get("/about", response_class=HTMLResponse)
 async def about():
