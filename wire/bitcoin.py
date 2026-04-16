@@ -698,7 +698,7 @@ async def _rewrite_bitcoin_chunk(client, model: str, clusters: list) -> tuple:
 # ── Story API ─────────────────────────────────────────────────────────────
 
 def _btc_reputable_sql() -> str:
-    names = ", ".join(f"'{n}'" for n in BTC_REPUTABLE_SOURCES)
+    names = ", ".join("'" + n.replace("'", "''") + "'" for n in BTC_REPUTABLE_SOURCES)
     return f"({names})"
 
 
