@@ -721,11 +721,21 @@ async def get_bitcoin_stories(
     where.append("(co.hidden IS NULL OR co.hidden = 0)")
 
     if category == "all":
-        where.append("sc.category LIKE 'bitcoin-%'")
+        # Surface any cluster that has at least one raw_item tagged bitcoin-*.
+        # This catches stories from Bitcoin Magazine, CoinDesk, etc. whose cluster
+        # was originally created with category 'markets' (before the bitcoin feeds
+        # were added), then had bitcoin-* raw_items appended to it later.
+        where.append(
+            "EXISTS (SELECT 1 FROM raw_items ri WHERE ri.cluster_id = sc.id AND ri.category LIKE 'bitcoin-%')"
+        )
     else:
         btc_cat = f"bitcoin-{category}"
-        where.append("COALESCE(co.category_override, sc.category) = ?")
-        params.append(btc_cat)
+        # For specific tabs: match by cluster category OR by any item in that exact category
+        where.append(
+            "(COALESCE(co.category_override, sc.category) = ?"
+            " OR EXISTS (SELECT 1 FROM raw_items ri WHERE ri.cluster_id = sc.id AND ri.category = ?))"
+        )
+        params.extend([btc_cat, btc_cat])
 
     if since:
         where.append("sc.last_updated > ?")
@@ -804,6 +814,12 @@ async def get_bitcoin_stories(
         ).fetchall():
             items_by_cluster.setdefault(i["cluster_id"], []).append(i)
 
+    total = conn.execute(
+        f"SELECT COUNT(*) as c FROM story_clusters sc"
+        f" LEFT JOIN curation_overrides co ON co.cluster_id = sc.id"
+        f" WHERE {where_clause}",
+        params
+    ).fetchone()["c"]
     conn.close()
 
     stories = []
@@ -844,6 +860,6 @@ async def get_bitcoin_stories(
 
     return JSONResponse({
         "stories":    stories,
-        "total":      len(stories),
+        "total":      total,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     })
